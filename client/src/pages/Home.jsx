@@ -8,25 +8,24 @@ import { AuthContext } from '../context/AuthContext'
 
 const Home = () => {
 	const { auth } = useContext(AuthContext)
-	const [selectedMovieIndex, setSelectedMovieIndex] = useState(parseInt(sessionStorage.getItem('selectedMovieIndex')))
+	const [selectedMovieIndex, setSelectedMovieIndex] = useState(
+		parseInt(sessionStorage.getItem('selectedMovieIndex')) || 0
+	)
 	const [movies, setMovies] = useState([])
 	const [isFetchingMoviesDone, setIsFetchingMoviesDone] = useState(false)
 
-	const fetchMovies = async (data) => {
+	const fetchMovies = async () => {
 		try {
 			setIsFetchingMoviesDone(false)
 			let response
 			if (auth.role === 'admin') {
 				response = await axios.get('/movie/unreleased/showing', {
-					headers: {
-						Authorization: `Bearer ${auth.token}`
-					}
+					headers: { Authorization: `Bearer ${auth.token}` }
 				})
 			} else {
 				response = await axios.get('/movie/showing')
 			}
-			// console.log(response.data.data)
-			setMovies(response.data.data)
+			setMovies(response.data?.data || [])
 		} catch (error) {
 			console.error(error)
 		} finally {
@@ -45,11 +44,14 @@ const Home = () => {
 		auth,
 		isFetchingMoviesDone
 	}
+
 	return (
-		<div className="flex min-h-screen flex-col gap-4 bg-gradient-to-br from-indigo-900 to-blue-500 pb-8 sm:gap-8">
+		<div className="min-h-screen bg-slate-950 text-slate-100 flex flex-col">
 			<Navbar />
-			<NowShowing {...props} />
-			{movies[selectedMovieIndex]?.name && <TheaterListsByMovie {...props} />}
+			<main className="flex-1 mx-auto w-full max-w-7xl px-4 py-8 sm:px-6 space-y-8">
+				<NowShowing {...props} />
+				{movies[selectedMovieIndex]?.name && <TheaterListsByMovie {...props} />}
+			</main>
 		</div>
 	)
 }

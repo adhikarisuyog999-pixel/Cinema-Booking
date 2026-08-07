@@ -1,5 +1,4 @@
-import { EyeIcon, EyeSlashIcon } from '@heroicons/react/24/outline'
-import { TrashIcon } from '@heroicons/react/24/solid'
+import { EyeIcon, EyeSlashIcon, TrashIcon } from '@heroicons/react/24/outline'
 import axios from 'axios'
 import { useContext, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
@@ -9,223 +8,130 @@ import { AuthContext } from '../context/AuthContext'
 const ShowtimeDetails = ({ showDeleteBtn, showtime, fetchShowtime }) => {
 	const { auth } = useContext(AuthContext)
 	const navigate = useNavigate()
-	const [isDeletingShowtimes, SetIsDeletingShowtimes] = useState(false)
-	const [isReleasingShowtime, setIsReleasingShowtime] = useState(false)
-	const [isUnreleasingShowtime, setIsUnreleasingShowtime] = useState(false)
+	const [isDeleting, setIsDeleting] = useState(false)
+	const [isTogglingRelease, setIsTogglingRelease] = useState(false)
 
-	const handleDelete = () => {
-		const confirmed = window.confirm(`Do you want to delete this showtime, including its tickets?`)
-		if (confirmed) {
-			onDeleteShowtime()
-		}
-	}
-
-	const onDeleteShowtime = async () => {
+	const handleDelete = async () => {
+		if (!window.confirm(`Are you sure you want to delete this showtime?`)) return
 		try {
-			SetIsDeletingShowtimes(true)
-			const response = await axios.delete(`/showtime/${showtime._id}`, {
-				headers: {
-					Authorization: `Bearer ${auth.token}`
-				}
+			setIsDeleting(true)
+			await axios.delete(`/showtime/${showtime._id}`, {
+				headers: { Authorization: `Bearer ${auth.token}` }
 			})
-			// console.log(response.data)
+			toast.success('Showtime deleted successfully')
 			navigate('/cinema')
-			toast.success('Delete showtime successful!', {
-				position: 'top-center',
-				autoClose: 2000,
-				pauseOnHover: false
-			})
 		} catch (error) {
 			console.error(error)
-			toast.error('Error', {
-				position: 'top-center',
-				autoClose: 2000,
-				pauseOnHover: false
-			})
+			toast.error('Failed to delete showtime')
 		} finally {
-			SetIsDeletingShowtimes(false)
+			setIsDeleting(false)
 		}
 	}
 
-	const handleReleaseShowtime = () => {
-		const confirmed = window.confirm(`Do you want to release this showtime?`)
-		if (confirmed) {
-			onReleaseShowtime()
-		}
-	}
-
-	const onReleaseShowtime = async () => {
-		setIsReleasingShowtime(true)
+	const handleToggleRelease = async (targetStatus) => {
 		try {
-			const response = await axios.put(
+			setIsTogglingRelease(true)
+			await axios.put(
 				`/showtime/${showtime._id}`,
-				{ isRelease: true },
-				{
-					headers: {
-						Authorization: `Bearer ${auth.token}`
-					}
-				}
+				{ isRelease: targetStatus },
+				{ headers: { Authorization: `Bearer ${auth.token}` } }
 			)
-			await fetchShowtime()
-			toast.success(`Release showtime successful!`, {
-				position: 'top-center',
-				autoClose: 2000,
-				pauseOnHover: false
-			})
+			if (fetchShowtime) await fetchShowtime()
+			toast.success(`Showtime ${targetStatus ? 'released' : 'unreleased'} successfully`)
 		} catch (error) {
 			console.error(error)
-			toast.error('Error', {
-				position: 'top-center',
-				autoClose: 2000,
-				pauseOnHover: false
-			})
+			toast.error('Failed to update release status')
 		} finally {
-			setIsReleasingShowtime(false)
+			setIsTogglingRelease(false)
 		}
 	}
 
-	const handleUnreleasedShowtime = () => {
-		const confirmed = window.confirm(`Do you want to unreleased this showtime?`)
-		if (confirmed) {
-			onUnreleasedShowtime()
-		}
-	}
-
-	const onUnreleasedShowtime = async () => {
-		setIsUnreleasingShowtime(true)
-		try {
-			const response = await axios.put(
-				`/showtime/${showtime._id}`,
-				{ isRelease: false },
-				{
-					headers: {
-						Authorization: `Bearer ${auth.token}`
-					}
-				}
-			)
-			await fetchShowtime()
-			toast.success(`Unreleased showtime successful!`, {
-				position: 'top-center',
-				autoClose: 2000,
-				pauseOnHover: false
-			})
-		} catch (error) {
-			console.error(error)
-			toast.error('Error', {
-				position: 'top-center',
-				autoClose: 2000,
-				pauseOnHover: false
-			})
-		} finally {
-			setIsUnreleasingShowtime(false)
-		}
-	}
+	const dt = showtime?.showtime ? new Date(showtime.showtime) : null
+	const weekday = dt ? dt.toLocaleDateString('en-US', { weekday: 'long' }) : ''
+	const fullDate = dt ? dt.toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' }) : ''
+	const formattedTime = dt ? dt.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' }) : ''
 
 	return (
-		<>
+		<div className="space-y-4">
 			{showDeleteBtn && auth.role === 'admin' && (
-				<div className="mb-4 flex justify-end gap-2">
-					{!showtime.isRelease && (
-						<button
-							title="Edit cinema name"
-							className="flex w-fit items-center gap-1 rounded-md bg-gradient-to-r from-indigo-600 to-blue-500  py-1 pl-2 pr-1.5 text-sm font-medium text-white hover:from-indigo-500 hover:to-blue-400 disabled:from-slate-500 disabled:to-slate-400"
-							onClick={() => handleReleaseShowtime(true)}
-							disabled={isReleasingShowtime}
-						>
-							{isReleasingShowtime ? (
-								'Processing...'
-							) : (
-								<>
-									RELEASE
-									<EyeIcon className="h-5 w-5" />
-								</>
-							)}
-						</button>
-					)}
-					{showtime.isRelease && (
-						<button
-							title="Edit cinema name"
-							className="flex w-fit items-center gap-1 rounded-md bg-gradient-to-r from-indigo-600 to-blue-500  py-1 pl-2 pr-1.5 text-sm font-medium text-white hover:from-indigo-500 hover:to-blue-400 disabled:from-slate-500 disabled:to-slate-400"
-							onClick={() => handleUnreleasedShowtime(true)}
-							disabled={isUnreleasingShowtime}
-						>
-							{isUnreleasingShowtime ? (
-								'Processing...'
-							) : (
-								<>
-									UNRELEASE
-									<EyeSlashIcon className="h-5 w-5" />
-								</>
-							)}
-						</button>
-					)}
+				<div className="flex justify-end gap-2">
 					<button
-						className="flex w-fit items-center gap-1 rounded-md bg-gradient-to-r from-red-700 to-rose-600 py-1 pl-2 pr-1.5 text-sm font-medium text-white hover:from-red-600 hover:to-rose-600 disabled:from-slate-500 disabled:to-slate-400"
-						onClick={() => handleDelete()}
-						disabled={isDeletingShowtimes}
+						onClick={() => handleToggleRelease(!showtime.isRelease)}
+						disabled={isTogglingRelease}
+						className="flex items-center gap-1.5 rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-xs font-semibold text-slate-700 hover:bg-slate-50 transition-colors shadow-sm disabled:opacity-50"
 					>
-						{isDeletingShowtimes ? (
-							'Processing...'
+						{showtime.isRelease ? (
+							<>
+								<EyeSlashIcon className="h-4 w-4 text-amber-600" />
+								<span>Unrelease</span>
+							</>
 						) : (
 							<>
-								DELETE
-								<TrashIcon className="h-5 w-5" />
+								<EyeIcon className="h-4 w-4 text-emerald-600" />
+								<span>Release Showtime</span>
 							</>
 						)}
 					</button>
+					<button
+						onClick={handleDelete}
+						disabled={isDeleting}
+						className="flex items-center gap-1.5 rounded-lg border border-red-200 bg-red-50 px-3 py-1.5 text-xs font-semibold text-red-600 hover:bg-red-100 transition-colors disabled:opacity-50"
+					>
+						<TrashIcon className="h-4 w-4" />
+						<span>{isDeleting ? 'Deleting...' : 'Delete'}</span>
+					</button>
 				</div>
 			)}
-			<div className="flex justify-between">
-				<div className="flex flex-col justify-center rounded-tl-lg bg-gradient-to-br from-gray-800 to-gray-700 px-4 py-0.5 text-center font-bold text-white sm:px-8">
-					<p className="text-sm">Theater</p>
-					<p className="text-3xl">{showtime?.theater?.number}</p>
-				</div>
-				<div className="flex w-fit grow items-center justify-center rounded-tr-lg bg-gradient-to-br from-indigo-800 to-blue-700 px-4 py-0.5 text-center text-xl font-bold text-white sm:text-3xl">
-					<p className="mx-auto">{showtime?.theater?.cinema.name}</p>
-					{!showtime?.isRelease && <EyeSlashIcon className="h-8 w-8" title="Unreleased showtime" />}
-				</div>
-			</div>
-			<div className="flex flex-col md:flex-row">
-				<div className="flex grow flex-col gap-4 bg-gradient-to-br from-indigo-100 to-white py-2 drop-shadow-lg sm:py-4">
-					<div className="flex items-center">
-						<img src={showtime?.movie?.img} className="w-32 px-4 drop-shadow-md" />
-						<div className="flex flex-col">
-							<h4 className="mr-4 text-xl font-semibold sm:text-2xl md:text-3xl">
-								{showtime?.movie?.name}
-							</h4>
-							{showtime?.movie && (
-								<p className="mr-4 font-medium sm:text-lg">
-									length : {showtime?.movie?.length || '-'} min
-								</p>
-							)}
-						</div>
+
+			<div className="overflow-hidden rounded-2xl border border-slate-100 bg-white shadow-xl">
+				{/* Top Header Banner */}
+				<div className="flex items-center justify-between border-b border-slate-100 bg-slate-50 px-6 py-3">
+					<div className="flex items-center gap-3">
+						<span className="rounded-md bg-orange-500 px-2.5 py-1 text-xs font-bold text-white uppercase tracking-wider shadow-sm">
+							Theater #{showtime?.theater?.number || '1'}
+						</span>
+						<h3 className="text-base font-bold text-slate-900 tracking-tight">
+							{showtime?.theater?.cinema?.name || 'Cinema Hall'}
+						</h3>
 					</div>
+					{!showtime?.isRelease && (
+						<span className="flex items-center gap-1 text-xs font-semibold text-amber-700 bg-amber-50 border border-amber-200 px-2.5 py-1 rounded-full">
+							<EyeSlashIcon className="h-3.5 w-3.5" /> Unreleased
+						</span>
+					)}
 				</div>
-				<div className="flex flex-col">
-					<div className="flex h-full min-w-max flex-col items-center justify-center gap-y-1 bg-gradient-to-br from-indigo-100 to-white py-2 text-center text-xl font-semibold drop-shadow-lg sm:py-4 sm:text-2xl md:items-start">
-						<p className="mx-4 text-lg leading-4 ">
-							{showtime?.showtime &&
-								`${new Date(showtime?.showtime).toLocaleString('default', { weekday: 'long' })}`}
-						</p>
-						<p className="mx-4 ">
-							{showtime?.showtime &&
-								`${new Date(showtime?.showtime).getDate()}
-               					 ${new Date(showtime?.showtime).toLocaleString('default', { month: 'long' })}
-                				${new Date(showtime?.showtime).getFullYear()}`}
-						</p>
-						<p className="mx-4 bg-gradient-to-r from-indigo-800 to-blue-700 bg-clip-text text-4xl font-bold text-transparent sm:text-5xl">
-							{showtime?.showtime &&
-								`${new Date(showtime?.showtime).getHours().toString().padStart(2, '0')} : ${new Date(
-									showtime?.showtime
-								)
-									.getMinutes()
-									.toString()
-									.padStart(2, '0')}`}
+
+				{/* Body info */}
+				<div className="flex flex-col md:flex-row items-center p-6 gap-6">
+					<div className="flex-shrink-0">
+						{showtime?.movie?.img ? (
+							<img
+								src={showtime.movie.img}
+								alt={showtime.movie?.name}
+								className="h-36 w-24 object-cover rounded-xl border border-slate-200 shadow-md"
+							/>
+						) : (
+							<div className="h-36 w-24 rounded-xl bg-slate-100 border border-slate-200 flex items-center justify-center text-xs text-slate-400">
+								No Poster
+							</div>
+						)}
+					</div>
+
+					<div className="flex-1 text-center md:text-left space-y-1">
+						<h2 className="text-2xl font-bold text-slate-900 tracking-tight">{showtime?.movie?.name}</h2>
+						<p className="text-xs text-slate-500">
+							Duration: <span className="text-slate-800 font-semibold">{showtime?.movie?.length || 120} mins</span>
 						</p>
 					</div>
+
+					<div className="rounded-xl border border-blue-100 bg-blue-50/60 p-4 text-center min-w-[200px]">
+						<p className="text-xs font-bold uppercase tracking-wider text-orange-600">{weekday}</p>
+						<p className="text-xs text-slate-500 mt-0.5">{fullDate}</p>
+						<p className="text-2xl font-extrabold text-blue-950 mt-1">{formattedTime}</p>
+					</div>
 				</div>
 			</div>
-		</>
+		</div>
 	)
 }
 

@@ -1,364 +1,269 @@
-import axios from 'axios'
-import { useContext, useEffect, useState } from 'react'
-import { useForm } from 'react-hook-form'
-import Select from 'react-tailwindcss-select'
-import { toast } from 'react-toastify'
-import 'react-toastify/dist/ReactToastify.css'
-import CinemaLists from '../components/CinemaLists'
-import DateSelector from '../components/DateSelector'
-import Loading from '../components/Loading'
-import Navbar from '../components/Navbar'
-import ScheduleTable from '../components/ScheduleTable'
-import { AuthContext } from '../context/AuthContext'
+import axios from "axios";
+import { useContext, useEffect, useMemo, useState } from "react";
+import { useNavigate } from "react-router";
+import { toast } from "react-toastify";
+import CinemaLists from "../components/CinemaLists";
+import DateSelector from "../components/DateSelector";
+import Loading from "../components/Loading";
+import Navbar from "../components/Navbar";
+import ScheduleTable from "../components/ScheduleTable";
+import { AuthContext } from "../context/AuthContext";
+
+const parseShowtimeDate = (value) => {
+  if (!value) return null;
+  if (value instanceof Date) return Number.isNaN(value.getTime()) ? null : value;
+  if (typeof value === "string" || typeof value === "number") {
+    const date = new Date(value);
+    return Number.isNaN(date.getTime()) ? null : date;
+  }
+  if (typeof value === "object") {
+    if (value.$date) return parseShowtimeDate(value.$date);
+    const candidates = [value.showtime, value.startTime, value.time, value.datetime, value.date, value.start, value.when];
+    for (const candidate of candidates) {
+      const parsed = parseShowtimeDate(candidate);
+      if (parsed) return parsed;
+    }
+  }
+  return null;
+};
 
 const Schedule = () => {
-	const { auth } = useContext(AuthContext)
-	const {
-		register,
-		handleSubmit,
-		reset,
-		watch,
-		setValue,
-		formState: { errors }
-	} = useForm()
-	const [selectedDate, setSelectedDate] = useState(
-		(sessionStorage.getItem('selectedDate') && new Date(sessionStorage.getItem('selectedDate'))) || new Date()
-	)
-	const [selectedCinemaIndex, setSelectedCinemaIndex] = useState(
-		parseInt(sessionStorage.getItem('selectedCinemaIndex')) || 0
-	)
-	const [cinemas, setCinemas] = useState([])
-	const [isFetchingCinemas, setIsFetchingCinemas] = useState(true)
-	const [movies, setMovies] = useState()
-	const [isAddingShowtime, SetIsAddingShowtime] = useState(false)
-	const [selectedMovie, setSelectedMovie] = useState(null)
+  const { auth } = useContext(AuthContext);
+  const navigate = useNavigate();
 
-	const fetchCinemas = async (data) => {
-		try {
-			setIsFetchingCinemas(true)
-			let response
-			if (auth.role === 'admin') {
-				response = await axios.get('/cinema/unreleased', {
-					headers: {
-						Authorization: `Bearer ${auth.token}`
-					}
-				})
-			} else {
-				response = await axios.get('/cinema')
-			}
-			// console.log(response.data.data)
-			setCinemas(response.data.data)
-		} catch (error) {
-			console.error(error)
-		} finally {
-			setIsFetchingCinemas(false)
-		}
-	}
+  const [selectedDate, setSelectedDate] = useState(
+    (sessionStorage.getItem("selectedDate") && new Date(sessionStorage.getItem("selectedDate"))) || new Date()
+  );
+  const [selectedCinemaIndex, setSelectedCinemaIndex] = useState(
+    parseInt(sessionStorage.getItem("selectedCinemaIndex")) || 0
+  );
+  const [cinemas, setCinemas] = useState([]);
+  const [isFetchingCinemas, setIsFetchingCinemas] = useState(true);
+  const [movies, setMovies] = useState([]);
+  const [isFetchingMovies, setIsFetchingMovies] = useState(true);
+  const [selectedMovieId, setSelectedMovieId] = useState(null);
+  const [showtimes, setShowtimes] = useState([]);
+  const [isBooking, setIsBooking] = useState(false);
 
-	useEffect(() => {
-		fetchCinemas()
-	}, [])
+  const fetchCinemas = async (newSelectedCinema) => {
+    try {
+      setIsFetchingCinemas(true);
+      const res = auth.role === "admin"
+        ? await axios.get("/cinema/unreleased", { headers: { Authorization: `Bearer ${auth.token}` } })
+        : await axios.get("/cinema");
 
-	const fetchMovies = async (data) => {
-		try {
-			const response = await axios.get('/movie')
-			// console.log(response.data.data)
-			setMovies(response.data.data)
-		} catch (error) {
-			console.error(error)
-		}
-	}
+      const cinemaData = res.data?.data || [];
+      setCinemas(cinemaData);
 
-	useEffect(() => {
-		fetchMovies()
-	}, [])
+      if (newSelectedCinema) {
+        cinemaData.forEach((cinema, index) => {
+          if (cinema.name === newSelectedCinema) {
+            setSelectedCinemaIndex(index);
+            sessionStorage.setItem("selectedCinemaIndex", index);
+          }
+        });
+      }
+    } catch (error) {
+      console.error(error);
+    } finally {
+      setIsFetchingCinemas(false);
+    }
+  };
 
-	useEffect(() => {
-		setValue('autoIncrease', true)
-		setValue('rounding5', true)
-		setValue('gap', '00:10')
-	}, [])
+  const fetchMoviesAndShowtimes = async () => {
+    try {
+      setIsFetchingMovies(true);
+      const [moviesRes, showtimesRes] = await Promise.all([
+        auth.role === "admin"
+          ? axios.get("/movie/unreleased/showing", { headers: { Authorization: `Bearer ${auth.token}` } })
+          : axios.get("/movie/showing"),
+        axios.get("/showtime")
+      ]);
 
-	const onAddShowtime = async (data) => {
-		try {
-			SetIsAddingShowtime(true)
-			if (!data.movie) {
-				toast.error('Please select a movie', {
-					position: 'top-center',
-					autoClose: 2000,
-					pauseOnHover: false
-				})
-				return
-			}
-			let showtime = new Date(selectedDate)
-			const [hours, minutes] = data.showtime.split(':')
-			showtime.setHours(hours, minutes, 0)
-			const response = await axios.post(
-				'/showtime',
-				{ movie: data.movie, showtime, theater: data.theater, repeat: data.repeat, isRelease: data.isRelease },
-				{
-					headers: {
-						Authorization: `Bearer ${auth.token}`
-					}
-				}
-			)
-			// console.log(response.data)
-			fetchCinemas()
-			if (data.autoIncrease) {
-				const movieLength = movies.find((movie) => movie._id === data.movie).length
-				const [GapHours, GapMinutes] = data.gap.split(':').map(Number)
-				const nextShowtime = new Date(showtime.getTime() + (movieLength + GapHours * 60 + GapMinutes) * 60000)
-				if (data.rounding5 || data.rounding10) {
-					const totalMinutes = nextShowtime.getHours() * 60 + nextShowtime.getMinutes()
-					const roundedMinutes = data.rounding5
-						? Math.ceil(totalMinutes / 5) * 5
-						: Math.ceil(totalMinutes / 10) * 10
-					let roundedHours = Math.floor(roundedMinutes / 60)
-					const remainderMinutes = roundedMinutes % 60
-					if (roundedHours === 24) {
-						nextShowtime.setDate(nextShowtime.getDate() + 1)
-						roundedHours = 0
-					}
-					setValue(
-						'showtime',
-						`${String(roundedHours).padStart(2, '0')}:${String(remainderMinutes).padStart(2, '0')}`
-					)
-				} else {
-					setValue(
-						'showtime',
-						`${String(nextShowtime.getHours()).padStart(2, '0')}:${String(
-							nextShowtime.getMinutes()
-						).padStart(2, '0')}`
-					)
-				}
-				if (data.autoIncreaseDate) {
-					setSelectedDate(nextShowtime)
-					sessionStorage.setItem('selectedDate', nextShowtime)
-				}
-			}
-			toast.success('Add showtime successful!', {
-				position: 'top-center',
-				autoClose: 2000,
-				pauseOnHover: false
-			})
-		} catch (error) {
-			console.error(error)
-			toast.error('Error', {
-				position: 'top-center',
-				autoClose: 2000,
-				pauseOnHover: false
-			})
-		} finally {
-			SetIsAddingShowtime(false)
-		}
-	}
+      const fetchedMovies = moviesRes.data?.data || [];
+      const fetchedShowtimes = showtimesRes.data?.data || [];
 
-	const props = {
-		cinemas,
-		selectedCinemaIndex,
-		setSelectedCinemaIndex,
-		fetchCinemas,
-		auth,
-		isFetchingCinemas
-	}
+      setMovies(fetchedMovies);
+      setShowtimes(fetchedShowtimes);
 
-	return (
-		<div className="flex min-h-screen flex-col gap-4 bg-gradient-to-br from-indigo-900 to-blue-500 pb-8 text-gray-900 sm:gap-8">
-			<Navbar />
-			<CinemaLists {...props} />
-			{selectedCinemaIndex !== null &&
-				(cinemas[selectedCinemaIndex]?.theaters?.length ? (
-					<div className="mx-4 flex flex-col gap-2 rounded-lg bg-gradient-to-br from-indigo-200 to-blue-100 p-4 drop-shadow-xl sm:mx-8 sm:gap-4 sm:p-6">
-						<h2 className="text-3xl font-bold text-gray-900">Schedule</h2>
-						<DateSelector selectedDate={selectedDate} setSelectedDate={setSelectedDate} />
-						{auth.role === 'admin' && (
-							<form
-								className="flex flex-col lg:flex-row gap-4 rounded-md bg-gradient-to-br from-indigo-100 to-white p-4"
-								onSubmit={handleSubmit(onAddShowtime)}
-							>
-								<div className="flex grow flex-col gap-2 rounded-lg">
-									<div className="flex flex-col gap-2 rounded-lg lg:flex-row lg:items-stretch">
-										<div className="flex grow items-center gap-x-2 gap-y-1 lg:flex-col lg:items-start">
-											<label className="whitespace-nowrap text-lg font-semibold leading-5">
-												Theater:
-											</label>
-											<select
-												className="h-9 w-full rounded bg-white px-2 py-1 font-semibold text-gray-900 drop-shadow-sm"
-												required
-												{...register('theater', { required: true })}
-											>
-												<option value="" defaultValue>
-													Choose a theater
-												</option>
-												{cinemas[selectedCinemaIndex].theaters?.map((theater, index) => {
-													return (
-														<option key={index} value={theater._id}>
-															{theater.number}
-														</option>
-													)
-												})}
-											</select>
-										</div>
-										<div className="flex grow-[2] items-center gap-x-2 gap-y-1 lg:flex-col lg:items-start">
-											<label className="whitespace-nowrap text-lg font-semibold leading-5">
-												Movie:
-											</label>
-											<Select
-												value={selectedMovie}
-												options={movies?.map((movie) => ({
-													value: movie._id,
-													label: movie.name
-												}))}
-												onChange={(value) => {
-													setValue('movie', value.value)
-													setSelectedMovie(value)
-												}}
-												isSearchable={true}
-												primaryColor="indigo"
-												classNames={{
-													menuButton: (value) =>
-														'flex font-semibold text-sm border border-gray-300 rounded shadow-sm transition-all duration-300 focus:outline-none bg-white hover:border-gray-400 focus:border-indigo-500 focus:ring focus:ring-indigo-500/20'
-												}}
-											/>
-										</div>
-										<div className="flex items-center gap-x-2 gap-y-1 lg:flex-col lg:items-start">
-											<label className="whitespace-nowrap text-lg font-semibold leading-5">
-												Showtime:
-											</label>
-											<input
-												type="time"
-												className="h-9 w-full rounded bg-white px-2 py-1 font-semibold text-gray-900 drop-shadow-sm"
-												required
-												{...register('showtime', { required: true })}
-											/>
-										</div>
-									</div>
-									<div className="flex flex-col gap-2 rounded-lg lg:flex-row lg:items-stretch">
-										<div className="flex items-center gap-x-2 gap-y-1 lg:flex-col lg:items-start">
-											<label className="whitespace-nowrap text-lg font-semibold leading-5">
-												Repeat (Day):
-											</label>
-											<input
-												type="number"
-												min={1}
-												defaultValue={1}
-												max={31}
-												className="h-9 w-full rounded bg-white px-2 py-1 font-semibold text-gray-900 drop-shadow-sm"
-												required
-												{...register('repeat', { required: true })}
-											/>
-										</div>
-										<label className="flex items-center gap-x-2 gap-y-1 whitespace-nowrap text-lg font-semibold leading-5 lg:flex-col lg:items-start">
-											Release now:
-											<input
-												type="checkbox"
-												className="h-6 w-6 lg:h-9 lg:w-9"
-												{...register('isRelease')}
-											/>
-										</label>
-										<div className="flex flex-col items-start gap-2 lg:flex-row lg:items-end">
-											<p className="font-semibold text-right underline">Auto increase</p>
-											<label
-												className="flex items-center gap-x-2 gap-y-1 whitespace-nowrap font-semibold leading-5 lg:flex-col lg:items-start"
-												title="After add, update showtime value to the movie ending time"
-											>
-												Showtime:
-												<input
-													type="checkbox"
-													className="h-6 w-6 lg:h-9 lg:w-9"
-													{...register('autoIncrease')}
-												/>
-											</label>
-											<label
-												className="flex items-center gap-x-2 gap-y-1 whitespace-nowrap font-semibold leading-5 lg:flex-col lg:items-start"
-												title="After add, update date value to the movie ending time"
-											>
-												Date:
-												<input
-													type="checkbox"
-													className="h-6 w-6 lg:h-9 lg:w-9"
-													disabled={!watch('autoIncrease')}
-													{...register('autoIncreaseDate')}
-												/>
-											</label>
-										</div>
-										<div
-											className="flex items-center gap-x-2 gap-y-1 lg:flex-col lg:items-start"
-											title="Gap between showtimes"
-										>
-											<label className="whitespace-nowrap font-semibold leading-5">Gap:</label>
-											<input
-												type="time"
-												className="h-9 w-full rounded bg-white px-2 py-1 font-semibold text-gray-900 drop-shadow-sm disabled:bg-gray-300"
-												disabled={!watch('autoIncrease')}
-												{...register('gap')}
-											/>
-										</div>
-										<div className="flex flex-col items-start gap-2 lg:flex-row lg:items-end">
-											<p className="font-semibold text-right underline">Rounding</p>
-											<label
-												className="flex items-center gap-x-2 gap-y-1 whitespace-nowrap font-semibold leading-5 lg:flex-col lg:items-start"
-												title="Rounding up to the nearest five minutes"
-											>
-												5-min:
-												<input
-													type="checkbox"
-													className="h-6 w-6 lg:h-9 lg:w-9"
-													disabled={!watch('autoIncrease')}
-													{...register('rounding5', {
-														onChange: () => setValue('rounding10', false)
-													})}
-												/>
-											</label>
-											<label
-												className="flex items-center gap-x-2 gap-y-1 whitespace-nowrap font-semibold leading-5 lg:flex-col lg:items-start"
-												title="Rounding up to the nearest ten minutes"
-											>
-												10-min:
-												<input
-													type="checkbox"
-													className="h-6 w-6 lg:h-9 lg:w-9"
-													disabled={!watch('autoIncrease')}
-													{...register('rounding10', {
-														onChange: () => setValue('rounding5', false)
-													})}
-												/>
-											</label>
-										</div>
-									</div>
-								</div>
-								<button
-									title="Add showtime"
-									disabled={isAddingShowtime}
-									className="whitespace-nowrap rounded-md bg-gradient-to-r from-indigo-600 to-blue-500 px-2 py-1 font-medium text-white drop-shadow-md hover:from-indigo-500 hover:to-blue-400 disabled:from-slate-500 disabled:to-slate-400"
-									type="submit"
-								>
-									ADD +
-								</button>
-							</form>
-						)}
-						{isFetchingCinemas ? (
-							<Loading />
-						) : (
-							<div>
-								<h2 className="text-2xl font-bold">Theaters</h2>
-								{cinemas[selectedCinemaIndex]?._id && (
-									<ScheduleTable
-										cinema={cinemas[selectedCinemaIndex]}
-										selectedDate={selectedDate}
-										auth={auth}
-									/>
-								)}
-							</div>
-						)}
-					</div>
-				) : (
-					<div className="mx-4 flex flex-col gap-2 rounded-lg bg-gradient-to-br from-indigo-200 to-blue-100 p-4 drop-shadow-xl sm:mx-8 sm:gap-4 sm:p-6">
-						<p className="text-center">There are no theaters available</p>
-					</div>
-				))}
-		</div>
-	)
-}
+      if (fetchedMovies.length > 0 && !selectedMovieId) {
+        setSelectedMovieId(fetchedMovies[0]._id);
+      }
+    } catch (error) {
+      console.error(error);
+    } finally {
+      setIsFetchingMovies(false);
+    }
+  };
 
-export default Schedule
+  useEffect(() => {
+    fetchCinemas();
+    fetchMoviesAndShowtimes();
+  }, []);
+
+  const selectedMovie = useMemo(() => {
+    return movies.find((movie) => movie._id === selectedMovieId) || movies[0] || null;
+  }, [movies, selectedMovieId]);
+
+  const activeShowtime = useMemo(() => {
+    if (!selectedMovie) return null;
+
+    const movieShowtimes = showtimes
+      .filter((st) => (st.movie?._id || st.movie) === selectedMovie._id)
+      .map((st) => ({
+        ...st,
+        startTime: parseShowtimeDate(st.showtime || st.startTime || st),
+        cinemaName: st.theater?.cinema?.name || "Cinema",
+        theaterNumber: st.theater?.number || 1
+      }))
+      .filter((st) => st.startTime && !Number.isNaN(st.startTime.getTime()))
+      .sort((a, b) => a.startTime - b.startTime);
+
+    return movieShowtimes[0] || null;
+  }, [selectedMovie, showtimes]);
+
+  const now = new Date();
+  const canBook = activeShowtime?.startTime
+    ? (activeShowtime.startTime.getTime() - now.getTime()) / (1000 * 60) > 30
+    : false;
+
+  const handleBookTicket = async () => {
+    if (!auth.token) {
+      navigate("/login");
+      return;
+    }
+    if (!activeShowtime?._id) {
+      toast.info("No available showtime selected");
+      return;
+    }
+
+    navigate(`/showtime/${activeShowtime._id}`);
+  };
+
+  const cinemaProps = {
+    cinemas,
+    selectedCinemaIndex,
+    setSelectedCinemaIndex,
+    fetchCinemas,
+    auth,
+    isFetchingCinemas
+  };
+
+  return (
+    <div className="min-h-screen bg-slate-950 text-slate-100 flex flex-col">
+      <Navbar />
+
+      <main className="flex-1 mx-auto w-full max-w-7xl px-4 py-8 sm:px-6 space-y-8">
+        <div>
+          <h1 className="text-2xl font-bold tracking-tight text-white">Movie Schedules & Booking</h1>
+          <p className="text-xs text-slate-400 mt-1">Select dates and cinemas to check showtimes</p>
+        </div>
+
+        <CinemaLists {...cinemaProps} />
+
+        <div className="rounded-2xl border border-slate-800 bg-slate-900/80 p-6 shadow-xl space-y-6">
+          <DateSelector selectedDate={selectedDate} setSelectedDate={setSelectedDate} />
+
+          <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+            {/* Movie List Section */}
+            <div className="lg:col-span-2 space-y-4">
+              <h2 className="text-sm font-bold text-white uppercase tracking-wider">Available Movies</h2>
+              {isFetchingMovies ? (
+                <Loading />
+              ) : movies.length ? (
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                  {movies.map((movie) => {
+                    const isSelected = selectedMovie?._id === movie._id;
+                    return (
+                      <div
+                        key={movie._id}
+                        onClick={() => setSelectedMovieId(movie._id)}
+                        className={`flex gap-3 p-3 rounded-xl border cursor-pointer transition-all ${
+                          isSelected
+                            ? "border-red-500 bg-red-950/30 shadow-md ring-1 ring-red-500"
+                            : "border-slate-800 bg-slate-950 hover:border-slate-700 hover:bg-slate-900"
+                        }`}
+                      >
+                        <img
+                          src={movie.img}
+                          alt={movie.name}
+                          className="h-24 w-16 object-cover rounded-lg flex-shrink-0"
+                        />
+                        <div className="flex flex-col justify-between py-1">
+                          <div>
+                            <h3 className="text-sm font-bold text-white leading-tight">{movie.name}</h3>
+                            <p className="text-xs text-slate-400 mt-1">{movie.length ? `${movie.length} min` : "120 min"}</p>
+                          </div>
+                          <span className="text-[10px] font-semibold uppercase text-red-400">
+                            {isSelected ? "Selected" : "Click to view"}
+                          </span>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              ) : (
+                <p className="text-xs text-slate-500 py-4">No movies scheduled for this day.</p>
+              )}
+            </div>
+
+            {/* Movie Detail & Quick Booking Sidebar */}
+            <div className="rounded-xl border border-slate-800 bg-slate-950 p-5 space-y-4">
+              {selectedMovie ? (
+                <>
+                  <div className="space-y-2">
+                    <img
+                      src={selectedMovie.img}
+                      alt={selectedMovie.name}
+                      className="h-44 w-full object-cover rounded-lg border border-slate-800"
+                    />
+                    <h3 className="text-lg font-bold text-white mt-2">{selectedMovie.name}</h3>
+                    <p className="text-xs text-slate-400">Duration: {selectedMovie.length || 120} minutes</p>
+                  </div>
+
+                  {activeShowtime ? (
+                    <div className="rounded-lg border border-slate-800 bg-slate-900 p-3 space-y-2 text-xs">
+                      <span className="text-[10px] font-bold text-red-400 uppercase tracking-wider block">Next Showtime</span>
+                      <p className="font-semibold text-white">
+                        {activeShowtime.startTime.toLocaleString()}
+                      </p>
+                      <p className="text-slate-400">
+                        {activeShowtime.cinemaName} (Theater #{activeShowtime.theaterNumber})
+                      </p>
+                      <button
+                        type="button"
+                        onClick={handleBookTicket}
+                        className="w-full mt-2 rounded-lg bg-red-600 px-4 py-2 text-xs font-semibold text-white shadow-md hover:bg-red-500 transition-colors"
+                      >
+                        Select Seats & Book
+                      </button>
+                    </div>
+                  ) : (
+                    <p className="text-xs text-slate-500 py-2">No active showtime found for this movie.</p>
+                  )}
+                </>
+              ) : (
+                <p className="text-xs text-slate-500">Select a movie from the list.</p>
+              )}
+            </div>
+          </div>
+        </div>
+
+        {cinemas[selectedCinemaIndex]?._id && (
+          <div className="rounded-2xl border border-slate-800 bg-slate-900/80 p-6 shadow-xl">
+            <h2 className="text-base font-bold text-white mb-4">
+              Theater Schedule ({cinemas[selectedCinemaIndex]?.name})
+            </h2>
+            <ScheduleTable
+              cinema={cinemas[selectedCinemaIndex]}
+              selectedDate={selectedDate}
+              auth={auth}
+            />
+          </div>
+        )}
+      </main>
+    </div>
+  );
+};
+
+export default Schedule;

@@ -3,38 +3,50 @@ import { memo, useState } from 'react'
 
 const Seat = ({ seat, setSelectedSeats, selectable, isAvailable }) => {
 	const [isSelected, setIsSelected] = useState(false)
-	return !isAvailable ? (
+	const seatId = `${seat.row}${seat.number}`
+
+	if (!isAvailable) {
+		return (
+			<button
+				title={`${seatId} - Booked / Unavailable`}
+				disabled
+				className="flex h-7 w-7 items-center justify-center p-0.5 cursor-not-allowed opacity-70"
+			>
+				<div className="h-5 w-5 rounded-md bg-slate-300 border border-slate-400"></div>
+			</button>
+		)
+	}
+
+	if (isSelected) {
+		return (
+			<button
+				title={`${seatId} - Selected`}
+				className="flex h-7 w-7 items-center justify-center p-0.5"
+				onClick={() => {
+					setIsSelected(false)
+					setSelectedSeats((prev) => prev.filter((e) => e !== seatId))
+				}}
+			>
+				<div className="flex h-5 w-5 items-center justify-center rounded-md bg-orange-500 border border-orange-600 shadow-md text-white">
+					<CheckIcon className="h-3.5 w-3.5 stroke-[3]" />
+				</div>
+			</button>
+		)
+	}
+
+	return (
 		<button
-			title={`${seat.row}${seat.number}`}
-			className="flex h-8 w-8 cursor-not-allowed items-center justify-center"
-		>
-			<div className="h-6 w-6 rounded bg-gray-500 drop-shadow-md"></div>
-		</button>
-	) : isSelected ? (
-		<button
-			title={`${seat.row}${seat.number}`}
-			className="flex h-8 w-8 items-center justify-center"
-			onClick={() => {
-				setIsSelected(false)
-				setSelectedSeats((prev) => prev.filter((e) => e !== `${seat.row}${seat.number}`))
-			}}
-		>
-			<div className="flex h-6 w-6 items-center justify-center rounded bg-blue-500 drop-shadow-md">
-				<CheckIcon className="h-5 w-5 stroke-[3] text-white" />
-			</div>
-		</button>
-	) : (
-		<button
-			title={`${seat.row}${seat.number}`}
-			className={`flex h-8 w-8 items-center justify-center ${!selectable && 'cursor-not-allowed'}`}
+			title={`${seatId} - Click to select`}
+			disabled={!selectable}
+			className={`flex h-7 w-7 items-center justify-center p-0.5 ${!selectable ? 'cursor-not-allowed opacity-50' : 'cursor-pointer'}`}
 			onClick={() => {
 				if (selectable) {
 					setIsSelected(true)
-					setSelectedSeats((prev) => [...prev, `${seat.row}${seat.number}`])
+					setSelectedSeats((prev) => [...prev, seatId])
 				}
 			}}
 		>
-			<div className="h-6 w-6 rounded bg-white drop-shadow-md"></div>
+			<div className="h-5 w-5 rounded-md border border-slate-300 bg-white hover:border-orange-500 hover:bg-orange-50 transition-colors shadow-sm"></div>
 		</button>
 	)
 }

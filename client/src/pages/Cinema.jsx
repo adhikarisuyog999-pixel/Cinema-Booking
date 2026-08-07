@@ -28,10 +28,9 @@ const Cinema = () => {
 				response = await axios.get('/cinema')
 			}
 
-			// console.log(response.data.data)
-			setCinemas(response.data.data)
-			if (newSelectedCinema) {
-				response.data.data.map((cinema, index) => {
+			setCinemas(response.data?.data || [])
+			if (newSelectedCinema && response.data?.data) {
+				response.data.data.forEach((cinema, index) => {
 					if (cinema.name === newSelectedCinema) {
 						setSelectedCinemaIndex(index)
 						sessionStorage.setItem('selectedCinemaIndex', index)
@@ -57,11 +56,14 @@ const Cinema = () => {
 		auth,
 		isFetchingCinemas
 	}
+
 	return (
-		<div className="flex min-h-screen flex-col gap-4 bg-gradient-to-br from-indigo-900 to-blue-500 pb-8 sm:gap-8">
+		<div className="min-h-screen bg-slate-950 text-slate-100 flex flex-col">
 			<Navbar />
-			<CinemaLists {...props} />
-			{cinemas[selectedCinemaIndex]?.name && <TheaterListsByCinema {...props} />}
+			<main className="flex-1 mx-auto w-full max-w-7xl px-4 py-8 sm:px-6 space-y-8">
+				<CinemaLists {...props} />
+				{cinemas[selectedCinemaIndex]?.name && <TheaterListsByCinema {...props} />}
+			</main>
 		</div>
 	)
 }

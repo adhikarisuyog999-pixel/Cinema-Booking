@@ -13,40 +13,47 @@ const AuthContextProvider = ({ children }) => {
 		}
 	) //{username, email, role, token}
 
-	const getUser = async () => {
+	const getUser = async (currentToken) => {
 		try {
-			if (!auth.token) return
+			const tokenToUse = currentToken || auth.token
+			if (!tokenToUse) return
 			const response = await axios.get('/auth/me', {
 				headers: {
-					Authorization: `Bearer ${auth.token}`
+					Authorization: `Bearer ${tokenToUse}`
 				}
 			})
 
-			const updatedAuth = {
-				...auth,
-				username: response.data.data.username,
-				email: response.data.data.email,
-				role: response.data.data.role
-			}
-
-			if (
-				updatedAuth.username !== auth.username ||
-				updatedAuth.email !== auth.email ||
-				updatedAuth.role !== auth.role
-			) {
-				setAuth(updatedAuth)
-			}
+			setAuth((prev) => {
+				const updated = {
+					...prev,
+					username: response.data.data.username,
+					email: response.data.data.email,
+					role: response.data.data.role
+				}
+				localStorage.setItem('auth', JSON.stringify(updated))
+				return updated
+			})
 		} catch (error) {
-			console.error(error)
+			console.error('Auth verification error:', error)
 		}
 	}
 
 	useEffect(() => {
-		getUser()
-		localStorage.setItem('auth', JSON.stringify(auth))
-	}, [auth])
+		if (auth.token) {
+			getUser(auth.token)
+		}
+	}, [auth.token])
 
-	return <AuthContext.Provider value={{ auth, setAuth }}>{children}</AuthContext.Provider>
+	const updateAuth = (newAuth) => {
+		setAuth(newAuth)
+		if (newAuth) {
+			localStorage.setItem('auth', JSON.stringify(newAuth))
+		} else {
+			localStorage.removeItem('auth')
+		}
+	}
+
+	return <AuthContext.Provider value={{ auth, setAuth: updateAuth }}>{children}</AuthContext.Provider>
 }
 
 export { AuthContext, AuthContextProvider }
