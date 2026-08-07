@@ -1,922 +1,460 @@
 import {
-	ChevronDownIcon,
-	ChevronUpDownIcon,
-	ChevronUpIcon,
-	EyeIcon,
-	EyeSlashIcon,
-	FunnelIcon,
-	InformationCircleIcon,
-	MapIcon
-} from '@heroicons/react/24/outline'
-import { ArrowDownIcon, TrashIcon } from '@heroicons/react/24/solid'
-import axios from 'axios'
-import { Fragment, useContext, useEffect, useState } from 'react'
-import { useNavigate } from 'react-router-dom'
-import Select from 'react-tailwindcss-select'
-import { toast } from 'react-toastify'
-import Loading from '../components/Loading'
-import Navbar from '../components/Navbar'
-import { AuthContext } from '../context/AuthContext'
+  CheckIcon,
+  ChevronDownIcon,
+  ChevronUpIcon,
+  FunnelIcon,
+  MagnifyingGlassIcon,
+  TrashIcon,
+  XMarkIcon
+} from "@heroicons/react/24/outline";
+import axios from "axios";
+import { useContext, useEffect, useState } from "react";
+import { Link } from "react-router-dom";
+import { toast } from "react-toastify";
+import Loading from "../components/Loading";
+import Navbar from "../components/Navbar";
+import { AuthContext } from "../context/AuthContext";
 
 const Search = () => {
-	const { auth } = useContext(AuthContext)
-	const [isOpenFilter, setIsOpenFilter] = useState(true)
-	const [isDeletingCheckedShowtimes, setIsDeletingCheckedShowtimes] = useState(false)
-	const [deletedCheckedShowtimes, setDeletedCheckedShowtimes] = useState(0)
-	const [isReleasingCheckedShowtimes, setIsReleasingCheckedShowtimes] = useState(false)
-	const [releasedCheckedShowtimes, setReleasedCheckedShowtimes] = useState(0)
-	const [isUnreleasingCheckedShowtimes, setIsUnreleasingCheckedShowtimes] = useState(false)
-	const [unreleasedCheckedShowtimes, setUnreleasedCheckedShowtimes] = useState(0)
-	const [isFetchingShowtimesDone, setIsFetchingShowtimesDone] = useState(false)
+  const { auth } = useContext(AuthContext);
+  const [showtimes, setShowtimes] = useState([]);
+  const [cinemas, setCinemas] = useState([]);
+  const [movies, setMovies] = useState([]);
+  const [loading, setLoading] = useState(true);
 
-	const [showtimes, setShowtimes] = useState([])
-	const [filterCinema, setFilterCinema] = useState(null)
-	const [filterTheater, setFilterTheater] = useState(null)
-	const [filterMovie, setFilterMovie] = useState(null)
-	const [filterDate, setFilterDate] = useState(null)
-	const [filterDateFrom, setFilterDateFrom] = useState(null)
-	const [filterDateTo, setFilterDateTo] = useState(null)
-	const [filterPastDate, setFilterPastDate] = useState(null)
-	const [filterToday, setFilterToday] = useState(null)
-	const [filterFutureDate, setFilterFutureDate] = useState(null)
-	const [filterTime, setFilterTime] = useState(null)
-	const [filterTimeFrom, setFilterTimeFrom] = useState(null)
-	const [filterTimeTo, setFilterTimeTo] = useState(null)
-	const [filterReleaseTrue, setFilterReleaseTrue] = useState(null)
-	const [filterReleaseFalse, setFilterReleaseFalse] = useState(null)
-	const [isCheckAll, setIsCheckAll] = useState(false)
-	const [checkedShowtimes, setCheckedShowtimes] = useState([])
+  // Search & Filter state
+  const [searchQuery, setSearchQuery] = useState("");
+  const [selectedCinema, setSelectedCinema] = useState("all");
+  const [selectedMovie, setSelectedMovie] = useState("all");
+  const [selectedRelease, setSelectedRelease] = useState("all");
+  const [sortField, setSortField] = useState("showtime");
+  const [sortAsc, setSortAsc] = useState(true);
 
-	const [sortCinema, setSortCinema] = useState(0) // -1: descending, 0 no sort, 1 ascending
-	const [sortTheater, setSortTheater] = useState(0)
-	const [sortMovie, setSortMovie] = useState(0)
-	const [sortDate, setSortDate] = useState(0)
-	const [sortTime, setSortTime] = useState(0)
-	const [sortBooked, setSortBooked] = useState(0)
-	const [sortRelease, setSortRelease] = useState(0)
+  const fetchInitialData = async () => {
+    setLoading(true);
+    const headers = auth.token ? { Authorization: `Bearer ${auth.token}` } : {};
 
-	const resetSort = () => {
-		setSortCinema(0)
-		setSortTheater(0)
-		setSortMovie(0)
-		setSortDate(0)
-		setSortTime(0)
-		setSortBooked(0)
-		setSortRelease(0)
-	}
+    // Safe individual requests to avoid cascading failures
+    try {
+      // 1. Fetch Showtimes
+      let stData = [];
+      try {
+        const res = auth.role === "admin"
+          ? await axios.get("/showtime/unreleased", { headers })
+          : await axios.get("/showtime");
+        stData = res.data?.data || [];
+      } catch (err) {
+        const fallbackRes = await axios.get("/showtime");
+        stData = fallbackRes.data?.data || [];
+      }
+      setShowtimes(stData);
 
-	const filteredShowtimes = showtimes
-		.filter((showtime) => {
-			const showtimeDate = new Date(showtime.showtime)
-			const year = showtimeDate.getFullYear()
-			const month = showtimeDate.toLocaleString('default', { month: 'short' })
-			const day = showtimeDate.getDate().toString().padStart(2, '0')
-			const formattedDate = `${day} ${month} ${year}`
-			const hours = showtimeDate.getHours().toString().padStart(2, '0')
-			const minutes = showtimeDate.getMinutes().toString().padStart(2, '0')
-			const formattedTime = `${hours} : ${minutes}`
-			return (
-				(!filterCinema || filterCinema.map((cinema) => cinema.value).includes(showtime.theater.cinema._id)) &&
-				(!filterTheater || filterTheater.map((theater) => theater.value).includes(showtime.theater.number)) &&
-				(!filterMovie || filterMovie.map((movie) => movie.value).includes(showtime.movie._id)) &&
-				(!filterDate || filterDate.map((showtime) => showtime.value).includes(formattedDate)) &&
-				(!filterDateFrom || new Date(filterDateFrom.value) <= new Date(formattedDate)) &&
-				(!filterDateTo || new Date(filterDateTo.value) >= new Date(formattedDate)) &&
-				(!filterPastDate ||
-					new Date(new Date().getFullYear(), new Date().getMonth(), new Date().getDate()) >
-						new Date(formattedDate)) &&
-				(!filterToday ||
-					(new Date().getFullYear() === new Date(formattedDate).getFullYear() &&
-						new Date().getMonth() === new Date(formattedDate).getMonth() &&
-						new Date().getDate() === new Date(formattedDate).getDate())) &&
-				(!filterFutureDate ||
-					new Date(new Date().getFullYear(), new Date().getMonth(), new Date().getDate()) <
-						new Date(formattedDate)) &&
-				(!filterTime || filterTime.map((showtime) => showtime.value).includes(formattedTime)) &&
-				(!filterTimeFrom || filterTimeFrom.value <= formattedTime) &&
-				(!filterTimeTo || filterTimeTo.value >= formattedTime) &&
-				(!filterReleaseTrue || showtime.isRelease) &&
-				(!filterReleaseFalse || !showtime.isRelease)
-			)
-		})
-		.sort((a, b) => {
-			if (sortCinema) {
-				return sortCinema * a.theater.cinema.name.localeCompare(b.theater.cinema.name)
-			}
-			if (sortTheater) {
-				return sortTheater * (a.theater.number - b.theater.number)
-			}
-			if (sortMovie) {
-				return sortMovie * a.movie.name.localeCompare(b.movie.name)
-			}
-			if (sortDate) {
-				return sortDate * (new Date(a.showtime) - new Date(b.showtime))
-			}
-			if (sortTime) {
-				return (
-					sortTime *
-					(new Date(a.showtime)
-						.getHours()
-						.toString()
-						.padStart(2, '0')
-						.concat(new Date(a.showtime).getMinutes().toString().padStart(2, '0')) -
-						new Date(b.showtime)
-							.getHours()
-							.toString()
-							.padStart(2, '0')
-							.concat(new Date(b.showtime).getMinutes().toString().padStart(2, '0')))
-				)
-			}
-			if (sortBooked) {
-				return sortBooked * (a.seats.length - b.seats.length)
-			}
-			if (sortRelease) {
-				return sortRelease * (a.isRelease - b.isRelease)
-			}
-		})
+      // 2. Fetch Cinemas
+      let cinData = [];
+      try {
+        const res = auth.role === "admin"
+          ? await axios.get("/cinema/unreleased", { headers })
+          : await axios.get("/cinema");
+        cinData = res.data?.data || [];
+      } catch (err) {
+        const fallbackRes = await axios.get("/cinema");
+        cinData = fallbackRes.data?.data || [];
+      }
+      setCinemas(cinData);
 
-	const fetchShowtimes = async (data) => {
-		try {
-			setIsFetchingShowtimesDone(false)
-			let response
-			if (auth.role === 'admin') {
-				response = await axios.get('/showtime/unreleased', {
-					headers: {
-						Authorization: `Bearer ${auth.token}`
-					}
-				})
-			} else {
-				response = await axios.get('/showtime')
-			}
-			// console.log(response.data.data)
-			setShowtimes(response.data.data)
-		} catch (error) {
-			console.error(error)
-		} finally {
-			setIsFetchingShowtimesDone(true)
-		}
-	}
+      // 3. Fetch Movies
+      try {
+        const res = await axios.get("/movie");
+        setMovies(res.data?.data || []);
+      } catch (err) {
+        console.error("Failed to load movies:", err);
+      }
 
-	useEffect(() => {
-		fetchShowtimes()
-	}, [])
+    } catch (error) {
+      console.error("Error loading search data:", error);
+      toast.error("Failed to load some search data.");
+    } finally {
+      setLoading(false);
+    }
+  };
 
-	const handleDeleteCheckedShowtimes = () => {
-		const confirmed = window.confirm(
-			`Do you want to delete ${checkedShowtimes.length} checked showtimes, including its tickets?`
-		)
-		if (confirmed) {
-			onDeleteCheckedShowtimes()
-		}
-	}
+  useEffect(() => {
+    fetchInitialData();
+  }, []);
 
-	const onDeleteCheckedShowtimes = async () => {
-		setIsDeletingCheckedShowtimes(true)
-		setDeletedCheckedShowtimes(0)
-		let successCounter = 0
-		let errorCounter = 0
-		const deletePromises = checkedShowtimes.map(async (checkedShowtime) => {
-			try {
-				const response = await axios.delete(`/showtime/${checkedShowtime}`, {
-					headers: {
-						Authorization: `Bearer ${auth.token}`
-					}
-				})
-				setDeletedCheckedShowtimes((prev) => prev + 1)
-				successCounter++
-				return response
-			} catch (error) {
-				console.error(error)
-				errorCounter++
-			}
-		})
-		await Promise.all(deletePromises)
-		toast.success(`Delete ${successCounter} checked showtimes successful!`, {
-			position: 'top-center',
-			autoClose: 2000,
-			pauseOnHover: false
-		})
-		errorCounter > 0 &&
-			toast.error(`Error deleting ${errorCounter} checked showtime`, {
-				position: 'top-center',
-				autoClose: 2000,
-				pauseOnHover: false
-			})
-		resetState()
-		fetchShowtimes()
-		setIsDeletingCheckedShowtimes(false)
-	}
+  const handleToggleRelease = async (id, currentStatus) => {
+    try {
+      await axios.put(
+        `/showtime/${id}`,
+        { isRelease: !currentStatus },
+        { headers: { Authorization: `Bearer ${auth.token}` } }
+      );
+      toast.success(
+        `Showtime ${!currentStatus ? "released" : "unreleased"} successfully`
+      );
+      setShowtimes((prev) =>
+        prev.map((s) => (s._id === id ? { ...s, isRelease: !currentStatus } : s))
+      );
+    } catch (err) {
+      console.error(err);
+      toast.error("Failed to update showtime release status.");
+    }
+  };
 
-	const handleReleaseCheckedShowtimes = () => {
-		const confirmed = window.confirm(`Do you want to release ${checkedShowtimes.length} checked showtimes?`)
-		if (confirmed) {
-			onReleaseCheckedShowtimes()
-		}
-	}
+  const handleDeleteShowtime = async (id) => {
+    if (!window.confirm("Are you sure you want to delete this showtime?")) return;
+    try {
+      await axios.delete(`/showtime/${id}`, {
+        headers: { Authorization: `Bearer ${auth.token}` }
+      });
+      toast.success("Showtime deleted");
+      setShowtimes((prev) => prev.filter((s) => s._id !== id));
+    } catch (err) {
+      console.error(err);
+      toast.error("Failed to delete showtime.");
+    }
+  };
 
-	const onReleaseCheckedShowtimes = async () => {
-		setIsReleasingCheckedShowtimes(true)
-		setReleasedCheckedShowtimes(0)
-		let successCounter = 0
-		let errorCounter = 0
-		const releasePromises = checkedShowtimes.map(async (checkedShowtime) => {
-			try {
-				const response = await axios.put(
-					`/showtime/${checkedShowtime}`,
-					{ isRelease: true },
-					{
-						headers: {
-							Authorization: `Bearer ${auth.token}`
-						}
-					}
-				)
-				setReleasedCheckedShowtimes((prev) => prev + 1)
-				successCounter++
-				return response
-			} catch (error) {
-				console.error(error)
-				errorCounter++
-			}
-		})
-		await Promise.all(releasePromises)
-		toast.success(`Release ${successCounter} checked showtimes successful!`, {
-			position: 'top-center',
-			autoClose: 2000,
-			pauseOnHover: false
-		})
-		errorCounter > 0 &&
-			toast.error(`Error releasing ${errorCounter} checked showtime`, {
-				position: 'top-center',
-				autoClose: 2000,
-				pauseOnHover: false
-			})
-		resetState()
-		fetchShowtimes()
-		setIsReleasingCheckedShowtimes(false)
-	}
+  // Filtered showtimes
+  const filteredShowtimes = showtimes.filter((s) => {
+    if (!s || !s.movie || !s.theater || !s.theater.cinema) return false;
 
-	const handleUnreleasedCheckedShowtimes = () => {
-		const confirmed = window.confirm(`Do you want to unreleased ${checkedShowtimes.length} checked showtimes?`)
-		if (confirmed) {
-			onUnreleasedCheckedShowtimes()
-		}
-	}
+    const movieTitle = s.movie.name?.toLowerCase() || "";
+    const cinemaName = s.theater.cinema.name?.toLowerCase() || "";
+    const q = searchQuery.toLowerCase().trim();
 
-	const onUnreleasedCheckedShowtimes = async () => {
-		setIsUnreleasingCheckedShowtimes(true)
-		setUnreleasedCheckedShowtimes(0)
-		let successCounter = 0
-		let errorCounter = 0
-		const releasePromises = checkedShowtimes.map(async (checkedShowtime) => {
-			try {
-				const response = await axios.put(
-					`/showtime/${checkedShowtime}`,
-					{ isRelease: false },
-					{
-						headers: {
-							Authorization: `Bearer ${auth.token}`
-						}
-					}
-				)
-				setUnreleasedCheckedShowtimes((prev) => prev + 1)
-				successCounter++
-				return response
-			} catch (error) {
-				console.error(error)
-				errorCounter++
-			}
-		})
-		await Promise.all(releasePromises)
-		toast.success(`Unreleased ${successCounter} checked showtimes successful!`, {
-			position: 'top-center',
-			autoClose: 2000,
-			pauseOnHover: false
-		})
-		errorCounter > 0 &&
-			toast.error(`Error unreleasing ${errorCounter} checked showtime`, {
-				position: 'top-center',
-				autoClose: 2000,
-				pauseOnHover: false
-			})
-		resetState()
-		fetchShowtimes()
-		setIsUnreleasingCheckedShowtimes(false)
-	}
+    const matchesQuery = !q || movieTitle.includes(q) || cinemaName.includes(q);
+    const matchesCinema =
+      selectedCinema === "all" || s.theater.cinema._id === selectedCinema;
+    const matchesMovie =
+      selectedMovie === "all" || s.movie._id === selectedMovie;
+    const matchesRelease =
+      selectedRelease === "all" ||
+      (selectedRelease === "released" && s.isRelease) ||
+      (selectedRelease === "unreleased" && !s.isRelease);
 
-	const resetState = () => {
-		setIsCheckAll(false)
-		setCheckedShowtimes([])
-	}
+    return matchesQuery && matchesCinema && matchesMovie && matchesRelease;
+  });
 
-	const navigate = useNavigate()
+  // Sorted showtimes
+  const sortedShowtimes = [...filteredShowtimes].sort((a, b) => {
+    let valA, valB;
+    if (sortField === "movie") {
+      valA = a.movie?.name || "";
+      valB = b.movie?.name || "";
+    } else if (sortField === "cinema") {
+      valA = a.theater?.cinema?.name || "";
+      valB = b.theater?.cinema?.name || "";
+    } else if (sortField === "theater") {
+      valA = a.theater?.number || 0;
+      valB = b.theater?.number || 0;
+    } else {
+      valA = new Date(a.showtime).getTime();
+      valB = new Date(b.showtime).getTime();
+    }
 
-	return (
-		<div className="flex min-h-screen flex-col gap-4 bg-gradient-to-br from-indigo-900 to-blue-500 pb-8 text-gray-900 sm:gap-8">
-			<Navbar />
-			<div className="mx-4 flex h-fit flex-col gap-2 rounded-lg bg-gradient-to-br from-indigo-200 to-blue-100 p-4 drop-shadow-xl sm:mx-8 sm:p-6">
-				<h2 className="text-3xl font-bold text-gray-900">Search Showtimes</h2>
-				<div className="flex flex-col gap-2 rounded-md bg-gradient-to-br from-indigo-100 to-white p-4 transition-all duration-500 ease-in-out">
-					<div className="flex items-center justify-between" onClick={() => setIsOpenFilter((prev) => !prev)}>
-						<div className="flex items-center gap-2 text-2xl font-bold text-gray-900">
-							<FunnelIcon className="h-6 w-6" />
-							Filter
-						</div>
-						{!isOpenFilter && (
-							<ChevronDownIcon className="h-6 w-6 transition-all hover:scale-125 hover:cursor-pointer" />
-						)}
-						{isOpenFilter && (
-							<ChevronUpIcon className="h-6 w-6 transition-all hover:scale-125 hover:cursor-pointer" />
-						)}
-					</div>
-					{isOpenFilter && (
-						<div className="">
-							<div className="flex flex-col">
-								<h4 className="pt-1 text-lg font-bold text-gray-800">Cinema :</h4>
-								<Select
-									value={filterCinema}
-									options={Array.from(
-										new Set(showtimes.map((showtime) => showtime.theater.cinema._id))
-									).map((value) => ({
-										value,
-										label: showtimes.find((showtime) => showtime.theater.cinema._id === value)
-											.theater.cinema.name
-									}))}
-									onChange={(value) => {
-										setFilterCinema(value)
-										resetState()
-									}}
-									isClearable={true}
-									isMultiple={true}
-									isSearchable={true}
-									primaryColor="indigo"
-								/>
-							</div>
-							<div className="flex flex-col">
-								<h4 className="pt-1 text-lg font-bold text-gray-800">Theater :</h4>
-								<Select
-									value={filterTheater}
-									options={Array.from(new Set(showtimes.map((showtime) => showtime.theater.number)))
-										.sort((a, b) => a - b)
-										.map((value) => ({
-											value,
-											label: value.toString()
-										}))}
-									onChange={(value) => {
-										setFilterTheater(value)
-										resetState()
-									}}
-									isClearable={true}
-									isMultiple={true}
-									isSearchable={true}
-									primaryColor="indigo"
-								/>
-							</div>
-							<div className="flex flex-col">
-								<h4 className="pt-1 text-lg font-bold text-gray-800">Movie :</h4>
-								<Select
-									value={filterMovie}
-									options={Array.from(new Set(showtimes.map((showtime) => showtime.movie._id))).map(
-										(value) => ({
-											value,
-											label: showtimes.find((showtime) => showtime.movie._id === value).movie.name
-										})
-									)}
-									onChange={(value) => {
-										setFilterMovie(value)
-										resetState()
-									}}
-									isClearable={true}
-									isMultiple={true}
-									isSearchable={true}
-									primaryColor="indigo"
-								/>
-							</div>
-							<div className="flex flex-col">
-								<h4 className="pt-1 text-lg font-bold text-gray-800">Date :</h4>
-								<Select
-									value={filterDate}
-									options={Array.from(
-										new Set(
-											showtimes.map((showtime) => {
-												const showtimeDate = new Date(showtime.showtime)
-												const year = showtimeDate.getFullYear()
-												const month = showtimeDate.toLocaleString('default', { month: 'short' })
-												const day = showtimeDate.getDate().toString().padStart(2, '0')
-												return `${day} ${month} ${year}`
-											})
-										)
-									).map((value) => ({
-										value,
-										label: value
-									}))}
-									onChange={(value) => {
-										setFilterDate(value)
-										resetState()
-									}}
-									isClearable={true}
-									isMultiple={true}
-									isSearchable={true}
-									primaryColor="indigo"
-								/>
-								<div className="my-2 flex flex-col items-start gap-x-2 gap-y-1 sm:flex-row sm:items-center">
-									<label className="text-md font-semibold text-gray-800">From</label>
-									<Select
-										value={filterDateFrom}
-										options={Array.from(
-											new Set(
-												showtimes.map((showtime) => {
-													const showtimeDate = new Date(showtime.showtime)
-													const year = showtimeDate.getFullYear()
-													const month = showtimeDate.toLocaleString('default', {
-														month: 'short'
-													})
-													const day = showtimeDate.getDate().toString().padStart(2, '0')
-													return `${day} ${month} ${year}`
-												})
-											)
-										)
-											// .filter((value) => !filterDateTo || new Date(filterDateTo.value) >= new Date(value))
-											.map((value) => ({
-												value,
-												label: value
-											}))}
-										onChange={(value) => {
-											setFilterDateFrom(value)
-											resetState()
-										}}
-										isClearable={true}
-										isSearchable={true}
-										primaryColor="indigo"
-									/>
-									<label className="text-md font-semibold text-gray-800">To</label>
-									<Select
-										value={filterDateTo}
-										options={Array.from(
-											new Set(
-												showtimes.map((showtime) => {
-													const showtimeDate = new Date(showtime.showtime)
-													const year = showtimeDate.getFullYear()
-													const month = showtimeDate.toLocaleString('default', {
-														month: 'short'
-													})
-													const day = showtimeDate.getDate().toString().padStart(2, '0')
-													return `${day} ${month} ${year}`
-												})
-											)
-										)
-											// .filter((value) => !filterDateFrom || new Date(filterDateFrom.value) <= new Date(value))
-											.map((value) => ({
-												value,
-												label: value
-											}))}
-										onChange={(value) => {
-											setFilterDateTo(value)
-											resetState()
-										}}
-										isClearable={true}
-										isSearchable={true}
-										primaryColor="indigo"
-									/>
-								</div>
-								<div className="flex flex-col items-start gap-x-8 gap-y-2 sm:flex-row sm:items-center">
-									<label className="text-md flex items-center justify-between gap-2 font-semibold text-gray-800">
-										Past Date
-										<input
-											type="checkbox"
-											className="h-6 w-6"
-											checked={filterPastDate}
-											onClick={(event) => {
-												setFilterPastDate(event.target.checked)
-												setFilterToday(false)
-												setFilterFutureDate(false)
-												resetState()
-											}}
-										/>
-									</label>
-									<label className="text-md flex items-center justify-between gap-2 font-semibold text-gray-800">
-										Today
-										<input
-											type="checkbox"
-											className="h-6 w-6"
-											checked={filterToday}
-											onClick={(event) => {
-												setFilterPastDate(false)
-												setFilterToday(event.target.checked)
-												setFilterFutureDate(false)
-												resetState()
-											}}
-										/>
-									</label>
-									<label className="text-md flex items-center justify-between gap-2 font-semibold text-gray-800">
-										Future Date
-										<input
-											type="checkbox"
-											className="h-6 w-6"
-											checked={filterFutureDate}
-											onClick={(event) => {
-												setFilterPastDate(false)
-												setFilterToday(false)
-												setFilterFutureDate(event.target.checked)
-												resetState()
-											}}
-										/>
-									</label>
-								</div>
-							</div>
-							<div className="flex flex-col">
-								<h4 className="pt-1 text-lg font-bold text-gray-800">Time :</h4>
-								<Select
-									value={filterTime}
-									options={Array.from(
-										new Set(
-											showtimes.map((showtime) => {
-												const showtimeDate = new Date(showtime.showtime)
-												const hours = showtimeDate.getHours().toString().padStart(2, '0')
-												const minutes = showtimeDate.getMinutes().toString().padStart(2, '0')
-												return `${hours} : ${minutes}`
-											})
-										)
-									)
-										.sort()
-										.map((value) => ({
-											value,
-											label: value
-										}))}
-									onChange={(value) => {
-										setFilterTime(value)
-										resetState()
-									}}
-									isClearable={true}
-									isMultiple={true}
-									isSearchable={true}
-									primaryColor="indigo"
-								/>
-								<div className="my-2 flex flex-col items-start gap-x-2 gap-y-1 sm:flex-row sm:items-center">
-									<label className="text-md font-semibold text-gray-800">From</label>
-									<Select
-										value={filterTimeFrom}
-										options={Array.from(
-											new Set(
-												showtimes.map((showtime) => {
-													const showtimeDate = new Date(showtime.showtime)
-													const hours = showtimeDate.getHours().toString().padStart(2, '0')
-													const minutes = showtimeDate
-														.getMinutes()
-														.toString()
-														.padStart(2, '0')
-													return `${hours} : ${minutes}`
-												})
-											)
-										)
-											.sort()
-											.map((value) => ({
-												value,
-												label: value
-											}))}
-										onChange={(value) => {
-											setFilterTimeFrom(value)
-											resetState()
-										}}
-										isClearable={true}
-										isSearchable={true}
-										primaryColor="indigo"
-									/>
-									<label className="text-md font-semibold text-gray-800">To</label>
-									<Select
-										value={filterTimeTo}
-										options={Array.from(
-											new Set(
-												showtimes.map((showtime) => {
-													const showtimeDate = new Date(showtime.showtime)
-													const hours = showtimeDate.getHours().toString().padStart(2, '0')
-													const minutes = showtimeDate
-														.getMinutes()
-														.toString()
-														.padStart(2, '0')
-													return `${hours} : ${minutes}`
-												})
-											)
-										)
-											.sort()
-											.map((value) => ({
-												value,
-												label: value
-											}))}
-										onChange={(value) => {
-											setFilterTimeTo(value)
-											resetState()
-										}}
-										isClearable={true}
-										isSearchable={true}
-										primaryColor="indigo"
-									/>
-								</div>
-							</div>
-							<div className="flex flex-col">
-								<h4 className="pt-1 text-lg font-bold text-gray-800">Release :</h4>
-								<div className="mt-1 flex flex-col items-start gap-x-8 gap-y-2 sm:flex-row sm:items-center">
-									<label className="text-md flex items-center justify-between gap-2 font-semibold text-gray-800">
-										True
-										<input
-											type="checkbox"
-											className="h-6 w-6"
-											checked={filterReleaseTrue}
-											onClick={(event) => {
-												setFilterReleaseTrue(event.target.checked)
-												setFilterReleaseFalse(false)
-												resetState()
-											}}
-										/>
-									</label>
-									<label className="text-md flex items-center justify-between gap-2 font-semibold text-gray-800">
-										False
-										<input
-											type="checkbox"
-											className="h-6 w-6"
-											checked={filterReleaseFalse}
-											onClick={(event) => {
-												setFilterReleaseTrue(false)
-												setFilterReleaseFalse(event.target.checked)
-												resetState()
-											}}
-										/>
-									</label>
-								</div>
-							</div>
-						</div>
-					)}
-				</div>
-				<div className="flex items-end">
-					<ArrowDownIcon className="h-8 min-h-[32px] w-8 min-w-[32px] px-1" />
-					<div className="flex flex-wrap items-center gap-2 px-1">
-						<button
-							className="flex w-fit items-center justify-center gap-1 rounded bg-gradient-to-r from-indigo-600 to-blue-500 py-1 pl-2 pr-1.5 text-sm font-medium text-white hover:from-indigo-500 hover:to-blue-400 disabled:from-slate-500 disabled:to-slate-400 md:min-w-fit"
-							onClick={() => handleReleaseCheckedShowtimes()}
-							disabled={checkedShowtimes.length === 0 || isReleasingCheckedShowtimes}
-						>
-							{isReleasingCheckedShowtimes ? (
-								`${releasedCheckedShowtimes} / ${checkedShowtimes.length} showtimes released`
-							) : (
-								<>
-									<EyeIcon className="h-5 w-5" />
-									{`Release ${checkedShowtimes.length} checked showtimes`}
-								</>
-							)}
-						</button>
-						<button
-							className="flex w-fit items-center justify-center gap-1 rounded bg-gradient-to-r from-indigo-600 to-blue-500 py-1 pl-2 pr-1.5 text-sm font-medium text-white hover:from-indigo-500 hover:to-blue-400 disabled:from-slate-500 disabled:to-slate-400 md:min-w-fit"
-							onClick={() => handleUnreleasedCheckedShowtimes()}
-							disabled={checkedShowtimes.length === 0 || isUnreleasingCheckedShowtimes}
-						>
-							{isUnreleasingCheckedShowtimes ? (
-								`${unreleasedCheckedShowtimes} / ${checkedShowtimes.length} showtimes unreleased`
-							) : (
-								<>
-									<EyeSlashIcon className="h-5 w-5" />
-									{`Unreleased ${checkedShowtimes.length} checked showtimes`}
-								</>
-							)}
-						</button>
-						<button
-							className="flex w-fit items-center justify-center gap-1 rounded bg-gradient-to-r from-red-700 to-rose-600 py-1 pl-2 pr-1.5 text-sm font-medium text-white hover:from-red-600 hover:to-rose-500 disabled:from-slate-500 disabled:to-slate-400 md:min-w-fit"
-							onClick={() => handleDeleteCheckedShowtimes()}
-							disabled={checkedShowtimes.length === 0 || isDeletingCheckedShowtimes}
-						>
-							{isDeletingCheckedShowtimes ? (
-								`${deletedCheckedShowtimes} / ${checkedShowtimes.length} showtimes deleted`
-							) : (
-								<>
-									<TrashIcon className="h-5 w-5" />
-									{`Delete ${checkedShowtimes.length} checked showtimes`}
-								</>
-							)}
-						</button>
-					</div>
+    if (valA < valB) return sortAsc ? -1 : 1;
+    if (valA > valB) return sortAsc ? 1 : -1;
+    return 0;
+  });
 
-					{isFetchingShowtimesDone && (
-						<div className="ml-auto flex items-center gap-1 px-1 text-sm font-medium">
-							<InformationCircleIcon className="h-5 w-5" /> Showing {filteredShowtimes.length} filtered
-							showtimes
-						</div>
-					)}
-				</div>
+  const handleSort = (field) => {
+    if (sortField === field) {
+      setSortAsc(!sortAsc);
+    } else {
+      setSortField(field);
+      setSortAsc(true);
+    }
+  };
 
-				<div
-					className={`mb-4 grid max-h-screen overflow-auto rounded-md bg-gradient-to-br from-indigo-100 to-white`}
-					style={{ gridTemplateColumns: '34px repeat(7, minmax(max-content, 1fr)) 104px' }}
-				>
-					<p className="sticky top-0 flex items-center justify-center rounded-tl-md bg-gradient-to-br from-gray-800 to-gray-700 text-center text-xl font-semibold text-white">
-						<input
-							type="checkbox"
-							className="h-6 w-6"
-							checked={isCheckAll}
-							onChange={() => {
-								if (isCheckAll) {
-									setIsCheckAll(false)
-									setCheckedShowtimes([])
-								} else {
-									setIsCheckAll(true)
-									setCheckedShowtimes((prev) => [
-										...prev,
-										...filteredShowtimes.map((showtime) => showtime._id)
-									])
-								}
-							}}
-							disabled={!isFetchingShowtimesDone}
-						/>
-					</p>
-					<button
-						className="sticky top-0 flex justify-center bg-gradient-to-br from-gray-800 to-gray-700 hover:from-gray-700 hover:to-gray-600 px-2 py-1 text-center text-xl font-semibold text-white"
-						onClick={() => {
-							let prevValue = sortCinema
-							resetSort()
-							setSortCinema(prevValue === 0 ? 1 : prevValue === 1 ? -1 : 0)
-						}}
-					>
-						<p className="ml-auto">Cinema</p>
-						{sortCinema === 0 && <ChevronUpDownIcon className="ml-auto w-6 h-6" />}
-						{sortCinema === 1 && <ChevronUpIcon className="ml-auto w-6 h-6" />}
-						{sortCinema === -1 && <ChevronDownIcon className="ml-auto w-6 h-6" />}
-					</button>
-					<button
-						className="sticky top-0 flex justify-center bg-gradient-to-br from-gray-800 to-gray-700 hover:from-gray-700 hover:to-gray-600 px-2 py-1 text-center text-xl font-semibold text-white"
-						onClick={() => {
-							let prevValue = sortTheater
-							resetSort()
-							setSortTheater(prevValue === 0 ? 1 : prevValue === 1 ? -1 : 0)
-						}}
-					>
-						<p className="ml-auto">Theater</p>
-						{sortTheater === 0 && <ChevronUpDownIcon className="ml-auto w-6 h-6" />}
-						{sortTheater === 1 && <ChevronUpIcon className="ml-auto w-6 h-6" />}
-						{sortTheater === -1 && <ChevronDownIcon className="ml-auto w-6 h-6" />}
-					</button>
-					<button
-						className="sticky top-0 flex justify-center bg-gradient-to-br from-gray-800 to-gray-700 hover:from-gray-700 hover:to-gray-600 px-2 py-1 text-center text-xl font-semibold text-white"
-						onClick={() => {
-							let prevValue = sortMovie
-							resetSort()
-							setSortMovie(prevValue === 0 ? 1 : prevValue === 1 ? -1 : 0)
-						}}
-					>
-						<p className="ml-auto">Movie</p>
-						{sortMovie === 0 && <ChevronUpDownIcon className="ml-auto w-6 h-6" />}
-						{sortMovie === 1 && <ChevronUpIcon className="ml-auto w-6 h-6" />}
-						{sortMovie === -1 && <ChevronDownIcon className="ml-auto w-6 h-6" />}
-					</button>
-					<button
-						className="sticky top-0 flex justify-center bg-gradient-to-br from-gray-800 to-gray-700 hover:from-gray-700 hover:to-gray-600 px-2 py-1 text-center text-xl font-semibold text-white"
-						onClick={() => {
-							let prevValue = sortDate
-							resetSort()
-							setSortDate(prevValue === 0 ? 1 : prevValue === 1 ? -1 : 0)
-						}}
-					>
-						<p className="ml-auto">Date</p>
-						{sortDate === 0 && <ChevronUpDownIcon className="ml-auto w-6 h-6" />}
-						{sortDate === 1 && <ChevronUpIcon className="ml-auto w-6 h-6" />}
-						{sortDate === -1 && <ChevronDownIcon className="ml-auto w-6 h-6" />}
-					</button>
-					<button
-						className="sticky top-0 flex justify-center bg-gradient-to-br from-gray-800 to-gray-700 hover:from-gray-700 hover:to-gray-600 px-2 py-1 text-center text-xl font-semibold text-white"
-						onClick={() => {
-							let prevValue = sortTime
-							resetSort()
-							setSortTime(prevValue === 0 ? 1 : prevValue === 1 ? -1 : 0)
-						}}
-					>
-						<p className="ml-auto">Time</p>
-						{sortTime === 0 && <ChevronUpDownIcon className="ml-auto w-6 h-6" />}
-						{sortTime === 1 && <ChevronUpIcon className="ml-auto w-6 h-6" />}
-						{sortTime === -1 && <ChevronDownIcon className="ml-auto w-6 h-6" />}
-					</button>
-					<button
-						className="sticky top-0 flex justify-center bg-gradient-to-br from-gray-800 to-gray-700 hover:from-gray-700 hover:to-gray-600 px-2 py-1 text-center text-xl font-semibold text-white"
-						onClick={() => {
-							let prevValue = sortBooked
-							resetSort()
-							setSortBooked(prevValue === 0 ? 1 : prevValue === 1 ? -1 : 0)
-						}}
-					>
-						<p className="ml-auto">Booked</p>
-						{sortBooked === 0 && <ChevronUpDownIcon className="ml-auto w-6 h-6" />}
-						{sortBooked === 1 && <ChevronUpIcon className="ml-auto w-6 h-6" />}
-						{sortBooked === -1 && <ChevronDownIcon className="ml-auto w-6 h-6" />}
-					</button>
-					<button
-						className="sticky top-0 flex justify-center bg-gradient-to-br from-gray-800 to-gray-700 hover:from-gray-700 hover:to-gray-600 px-2 py-1 text-center text-xl font-semibold text-white"
-						onClick={() => {
-							let prevValue = sortRelease
-							resetSort()
-							setSortRelease(prevValue === 0 ? 1 : prevValue === 1 ? -1 : 0)
-						}}
-					>
-						<p className="ml-auto">Release</p>
-						{sortRelease === 0 && <ChevronUpDownIcon className="ml-auto w-6 h-6" />}
-						{sortRelease === 1 && <ChevronUpIcon className="ml-auto w-6 h-6" />}
-						{sortRelease === -1 && <ChevronDownIcon className="ml-auto w-6 h-6" />}
-					</button>
-					<p className="sticky top-0 z-[1] flex items-center justify-center gap-2 rounded-tr-md bg-gradient-to-br from-gray-800 to-gray-700 px-2 py-1 text-center text-xl font-semibold text-white">
-						<MapIcon className="h-6 w-6" />
-						View
-					</p>
-					{isFetchingShowtimesDone &&
-						filteredShowtimes.map((showtime, index) => {
-							const showtimeDate = new Date(showtime.showtime)
-							const year = showtimeDate.getFullYear()
-							const month = showtimeDate.toLocaleString('default', { month: 'short' })
-							const day = showtimeDate.getDate().toString().padStart(2, '0')
-							const hours = showtimeDate.getHours().toString().padStart(2, '0')
-							const minutes = showtimeDate.getMinutes().toString().padStart(2, '0')
-							const isCheckedRow = checkedShowtimes.includes(showtime._id)
-							return (
-								<Fragment key={index}>
-									<div
-										className={`flex items-center justify-center border-t-2 border-indigo-200 ${
-											isCheckedRow && 'border-white bg-blue-200 text-blue-800'
-										}`}
-									>
-										<input
-											id={showtime._id}
-											type="checkbox"
-											className="h-6 w-6"
-											checked={checkedShowtimes.includes(showtime._id)}
-											onChange={(e) => {
-												const { id, checked } = e.target
-												setCheckedShowtimes((prev) => [...prev, id])
-												if (!checked) {
-													setCheckedShowtimes((prev) => prev.filter((item) => item !== id))
-												}
-											}}
-											disabled={!isFetchingShowtimesDone}
-										/>
-									</div>
-									<div
-										className={`border-t-2 border-indigo-200 px-2 py-1 ${
-											isCheckedRow && 'border-white bg-blue-200 text-blue-800'
-										}`}
-									>
-										{showtime.theater.cinema.name}
-									</div>
-									<div
-										className={`border-t-2 border-indigo-200 px-2 py-1 ${
-											isCheckedRow && 'border-white bg-blue-200 text-blue-800'
-										}`}
-									>
-										{showtime.theater.number}
-									</div>
-									<div
-										className={`border-t-2 border-indigo-200 px-2 py-1 ${
-											isCheckedRow && 'border-white bg-blue-200 text-blue-800'
-										}`}
-									>
-										{showtime.movie.name}
-									</div>
-									<div
-										className={`border-t-2 border-indigo-200 px-2 py-1 ${
-											isCheckedRow && 'border-white bg-blue-200 text-blue-800'
-										}`}
-									>{`${day} ${month} ${year}`}</div>
-									<div
-										className={`border-t-2 border-indigo-200 px-2 py-1 ${
-											isCheckedRow && 'border-white bg-blue-200 text-blue-800'
-										}`}
-									>{`${hours} : ${minutes}`}</div>
-									<div
-										className={`border-t-2 border-indigo-200 px-2 py-1 ${
-											isCheckedRow && 'border-white bg-blue-200 text-blue-800'
-										}`}
-									>
-										{showtime.seats.length}
-									</div>
-									<div
-										className={`flex items-center gap-2 border-t-2 border-indigo-200 px-2 py-1 ${
-											isCheckedRow && 'border-white bg-blue-200 text-blue-800'
-										}`}
-									>
-										<p>
-											{String(showtime.isRelease).charAt(0).toUpperCase() +
-												String(showtime.isRelease).slice(1)}
-										</p>
-										{!showtime.isRelease && (
-											<EyeSlashIcon className="h-5 w-5" title="Unreleased showtime" />
-										)}
-									</div>
-									<button
-										className="flex items-center justify-center gap-2 bg-gradient-to-br from-indigo-600 to-blue-500 px-2 py-1 text-white drop-shadow-md hover:from-indigo-500 hover:to-blue-400 disabled:from-slate-500 disabled:to-slate-400"
-										onClick={() => navigate(`/showtime/${showtime._id}`)}
-									>
-										<MapIcon className="h-6 w-6" />
-										View
-									</button>
-								</Fragment>
-							)
-						})}
-				</div>
-				{!isFetchingShowtimesDone && <Loading />}
-			</div>
-		</div>
-	)
-}
+  const resetFilters = () => {
+    setSearchQuery("");
+    setSelectedCinema("all");
+    setSelectedMovie("all");
+    setSelectedRelease("all");
+  };
 
-export default Search
+  return (
+    <div className="min-h-screen text-slate-800 flex flex-col">
+      <Navbar />
+
+      <main className="flex-1 mx-auto w-full max-w-7xl px-4 py-8 sm:px-6">
+        {/* Header Section */}
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-6 text-white">
+          <div>
+            <h1 className="text-2xl font-bold tracking-tight text-white drop-shadow-sm">
+              Showtime Search & Management
+            </h1>
+            <p className="text-xs text-blue-100 mt-1">
+              Search, filter, and manage showtimes across all cinemas
+            </p>
+          </div>
+          <div className="flex items-center gap-2">
+            <span className="rounded-lg bg-white/20 backdrop-blur-md border border-white/30 px-3.5 py-1.5 text-xs text-white shadow-sm">
+              Total: <strong className="text-white font-bold">{sortedShowtimes.length}</strong> showtimes
+            </span>
+          </div>
+        </div>
+
+        {/* Filter Controls Panel - Crisp White Card */}
+        <div className="rounded-2xl border border-slate-100 bg-white p-5 shadow-xl mb-6">
+          <div className="flex items-center justify-between text-sm font-semibold text-slate-800 pb-3 border-b border-slate-100 mb-4">
+            <div className="flex items-center gap-2">
+              <FunnelIcon className="h-5 w-5 text-orange-500" />
+              <span>Search & Filter Options</span>
+            </div>
+            {(searchQuery || selectedCinema !== "all" || selectedMovie !== "all" || selectedRelease !== "all") && (
+              <button
+                onClick={resetFilters}
+                className="text-xs font-semibold text-orange-600 hover:text-orange-700 transition-colors flex items-center gap-1"
+              >
+                <XMarkIcon className="h-4 w-4" /> Reset Filters
+              </button>
+            )}
+          </div>
+
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+            {/* Text Search */}
+            <div>
+              <label className="block text-xs font-semibold text-slate-600 mb-1">
+                Search Title or Cinema
+              </label>
+              <div className="relative">
+                <MagnifyingGlassIcon className="absolute left-3 top-2.5 h-4 w-4 text-slate-400" />
+                <input
+                  type="text"
+                  value={searchQuery}
+                  onChange={(e) => setSearchQuery(e.target.value)}
+                  placeholder="e.g. Avatar or Grand Cinema"
+                  className="w-full rounded-xl border border-slate-200 bg-slate-50 pl-9 pr-3 py-2 text-xs text-slate-800 placeholder-slate-400 focus:border-orange-500 focus:bg-white focus:outline-none transition-all"
+                />
+                {searchQuery && (
+                  <button
+                    onClick={() => setSearchQuery("")}
+                    className="absolute right-2.5 top-2.5 text-slate-400 hover:text-slate-600"
+                  >
+                    <XMarkIcon className="h-4 w-4" />
+                  </button>
+                )}
+              </div>
+            </div>
+
+            {/* Cinema Filter */}
+            <div>
+              <label className="block text-xs font-semibold text-slate-600 mb-1">
+                Cinema
+              </label>
+              <select
+                value={selectedCinema}
+                onChange={(e) => setSelectedCinema(e.target.value)}
+                className="w-full rounded-xl border border-slate-200 bg-slate-50 px-3 py-2 text-xs text-slate-800 focus:border-orange-500 focus:bg-white focus:outline-none transition-all"
+              >
+                <option value="all">All Cinemas</option>
+                {cinemas.map((c) => (
+                  <option key={c._id} value={c._id}>
+                    {c.name}
+                  </option>
+                ))}
+              </select>
+            </div>
+
+            {/* Movie Filter */}
+            <div>
+              <label className="block text-xs font-semibold text-slate-600 mb-1">
+                Movie
+              </label>
+              <select
+                value={selectedMovie}
+                onChange={(e) => setSelectedMovie(e.target.value)}
+                className="w-full rounded-xl border border-slate-200 bg-slate-50 px-3 py-2 text-xs text-slate-800 focus:border-orange-500 focus:bg-white focus:outline-none transition-all"
+              >
+                <option value="all">All Movies</option>
+                {movies.map((m) => (
+                  <option key={m._id} value={m._id}>
+                    {m.name}
+                  </option>
+                ))}
+              </select>
+            </div>
+
+            {/* Release Status Filter */}
+            <div>
+              <label className="block text-xs font-semibold text-slate-600 mb-1">
+                Release Status
+              </label>
+              <select
+                value={selectedRelease}
+                onChange={(e) => setSelectedRelease(e.target.value)}
+                className="w-full rounded-xl border border-slate-200 bg-slate-50 px-3 py-2 text-xs text-slate-800 focus:border-orange-500 focus:bg-white focus:outline-none transition-all"
+              >
+                <option value="all">All Statuses</option>
+                <option value="released">Released Only</option>
+                <option value="unreleased">Unreleased Only</option>
+              </select>
+            </div>
+          </div>
+        </div>
+
+        {/* Results Section */}
+        {loading ? (
+          <div className="py-12 bg-white rounded-2xl shadow-xl">
+            <Loading />
+          </div>
+        ) : sortedShowtimes.length === 0 ? (
+          <div className="rounded-2xl border border-slate-100 bg-white p-12 text-center text-slate-500 shadow-xl">
+            <p className="text-sm font-medium">No showtimes found matching your filter criteria.</p>
+            <button
+              onClick={resetFilters}
+              className="mt-4 rounded-xl bg-orange-500 px-5 py-2 text-xs font-semibold text-white shadow-md hover:bg-orange-600 transition-colors"
+            >
+              Clear All Filters
+            </button>
+          </div>
+        ) : (
+          <div className="overflow-hidden rounded-2xl border border-slate-100 bg-white shadow-xl">
+            <div className="overflow-x-auto">
+              <table className="w-full text-left text-xs text-slate-700">
+                <thead className="bg-slate-50 text-slate-500 border-b border-slate-100 uppercase font-semibold text-[11px]">
+                  <tr>
+                    <th
+                      className="px-4 py-3.5 cursor-pointer hover:text-slate-900"
+                      onClick={() => handleSort("movie")}
+                    >
+                      <div className="flex items-center gap-1">
+                        Movie
+                        {sortField === "movie" &&
+                          (sortAsc ? (
+                            <ChevronUpIcon className="h-3 w-3 text-orange-500" />
+                          ) : (
+                            <ChevronDownIcon className="h-3 w-3 text-orange-500" />
+                          ))}
+                      </div>
+                    </th>
+                    <th
+                      className="px-4 py-3.5 cursor-pointer hover:text-slate-900"
+                      onClick={() => handleSort("cinema")}
+                    >
+                      <div className="flex items-center gap-1">
+                        Cinema
+                        {sortField === "cinema" &&
+                          (sortAsc ? (
+                            <ChevronUpIcon className="h-3 w-3 text-orange-500" />
+                          ) : (
+                            <ChevronDownIcon className="h-3 w-3 text-orange-500" />
+                          ))}
+                      </div>
+                    </th>
+                    <th
+                      className="px-4 py-3.5 cursor-pointer hover:text-slate-900"
+                      onClick={() => handleSort("theater")}
+                    >
+                      <div className="flex items-center gap-1">
+                        Theater
+                        {sortField === "theater" &&
+                          (sortAsc ? (
+                            <ChevronUpIcon className="h-3 w-3 text-orange-500" />
+                          ) : (
+                            <ChevronDownIcon className="h-3 w-3 text-orange-500" />
+                          ))}
+                      </div>
+                    </th>
+                    <th
+                      className="px-4 py-3.5 cursor-pointer hover:text-slate-900"
+                      onClick={() => handleSort("showtime")}
+                    >
+                      <div className="flex items-center gap-1">
+                        Showtime
+                        {sortField === "showtime" &&
+                          (sortAsc ? (
+                            <ChevronUpIcon className="h-3 w-3 text-orange-500" />
+                          ) : (
+                            <ChevronDownIcon className="h-3 w-3 text-orange-500" />
+                          ))}
+                      </div>
+                    </th>
+                    <th className="px-4 py-3.5">Status</th>
+                    <th className="px-4 py-3.5 text-right">Actions</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-slate-100">
+                  {sortedShowtimes.map((s) => {
+                    const dt = new Date(s.showtime);
+                    const formattedDate = dt.toLocaleDateString("en-US", {
+                      weekday: "short",
+                      month: "short",
+                      day: "numeric",
+                      year: "numeric"
+                    });
+                    const formattedTime = dt.toLocaleTimeString("en-US", {
+                      hour: "2-digit",
+                      minute: "2-digit"
+                    });
+
+                    return (
+                      <tr key={s._id} className="hover:bg-slate-50/80 transition-colors">
+                        <td className="px-4 py-3.5 font-semibold text-slate-900">
+                          <Link
+                            to={`/showtime/${s._id}`}
+                            className="hover:text-orange-600 transition-colors"
+                          >
+                            {s.movie?.name || "Unknown"}
+                          </Link>
+                        </td>
+                        <td className="px-4 py-3.5 font-medium">{s.theater?.cinema?.name || "N/A"}</td>
+                        <td className="px-4 py-3.5">Theater #{s.theater?.number}</td>
+                        <td className="px-4 py-3.5">
+                          <div className="font-medium text-slate-900">{formattedDate}</div>
+                          <div className="text-[11px] text-slate-500">{formattedTime}</div>
+                        </td>
+                        <td className="px-4 py-3.5">
+                          {s.isRelease ? (
+                            <span className="inline-flex items-center gap-1 rounded-full bg-emerald-50 border border-emerald-200 px-2.5 py-0.5 text-[10px] font-bold text-emerald-700">
+                              <CheckIcon className="h-3 w-3" /> Released
+                            </span>
+                          ) : (
+                            <span className="inline-flex items-center gap-1 rounded-full bg-amber-50 border border-amber-200 px-2.5 py-0.5 text-[10px] font-bold text-amber-700">
+                              Unreleased
+                            </span>
+                          )}
+                        </td>
+                        <td className="px-4 py-3.5 text-right">
+                          <div className="flex items-center justify-end gap-2">
+                            <Link
+                              to={`/showtime/${s._id}`}
+                              className="rounded-lg border border-slate-200 bg-slate-50 px-2.5 py-1 text-[11px] font-semibold text-slate-700 hover:bg-slate-100 transition-colors"
+                            >
+                              Seats
+                            </Link>
+                            <button
+                              onClick={() => handleToggleRelease(s._id, s.isRelease)}
+                              className={`rounded-lg border px-2.5 py-1 text-[11px] font-semibold transition-colors ${
+                                s.isRelease
+                                  ? "border-amber-200 bg-amber-50 text-amber-800 hover:bg-amber-100"
+                                  : "border-emerald-200 bg-emerald-50 text-emerald-800 hover:bg-emerald-100"
+                              }`}
+                            >
+                              {s.isRelease ? "Unrelease" : "Release"}
+                            </button>
+                            <button
+                              onClick={() => handleDeleteShowtime(s._id)}
+                              className="rounded-lg border border-red-200 bg-red-50 p-1 text-red-600 hover:bg-red-100 transition-colors"
+                              title="Delete Showtime"
+                            >
+                              <TrashIcon className="h-4 w-4" />
+                            </button>
+                          </div>
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        )}
+      </main>
+    </div>
+  );
+};
+
+export default Search;

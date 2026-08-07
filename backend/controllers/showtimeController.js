@@ -61,6 +61,21 @@ exports.getShowtime = async (req, res, next) => {
 			return res.status(400).json({ success: false, message: `Showtime is not released` })
 		}
 
+		// Check 30 min window for seat release
+		const now = new Date()
+		const showtimeTime = new Date(showtime.showtime)
+		const minsRemaining = (showtimeTime.getTime() - now.getTime()) / (1000 * 60)
+
+		if (minsRemaining <= 30) {
+			const Ticket = require('../models/Ticket')
+			const confirmedTickets = await Ticket.find({ showtime: showtime._id, status: 'purchased' })
+			const confirmedSeats = new Set()
+			confirmedTickets.forEach(t => {
+				t.seats?.forEach(s => confirmedSeats.add(`${s.row}${s.number}`))
+			})
+			showtime.seats = showtime.seats.filter(seat => confirmedSeats.has(`${seat.row}${seat.number}`))
+		}
+
 		res.status(200).json({ success: true, data: showtime })
 	} catch (err) {
 		console.log(err)
@@ -138,12 +153,12 @@ exports.addShowtime = async (req, res, next) => {
 	}
 }
 
-//@desc     Purchase seats
+//@desc     Purchase / Book seats
 //@route    POST /showtime/:id
 //@access   Private
 exports.purchase = async (req, res, next) => {
 	try {
-		const { seats } = req.body
+		const { seats, isPurchased = false } = req.body
 		const user = req.user
 
 		const showtime = await Showtime.findById(req.params.id).populate({ path: 'theater', select: 'seatPlan' })
@@ -152,8 +167,35 @@ exports.purchase = async (req, res, next) => {
 			return res.status(400).json({ success: false, message: `Showtime not found with id of ${req.params.id}` })
 		}
 
+		const now = new Date()
+		const showtimeTime = new Date(showtime.showtime)
+		const minsRemaining = (showtimeTime.getTime() - now.getTime()) / (1000 * 60)
+
+		if (minsRemaining < 0) {
+			return res.status(400).json({ success: false, message: 'This showtime has already passed' })
+		}
+
+		if (minsRemaining <= 30 && !isPurchased) {
+			return res.status(400).json({
+				success: false,
+				message: 'Booking closes 30 minutes before showtime. You must purchase tickets directly.'
+			})
+		}
+
+		const Ticket = require('../models/Ticket')
+		if (minsRemaining <= 30) {
+			const confirmedTickets = await Ticket.find({ showtime: showtime._id, status: 'purchased' })
+			const confirmedSeats = new Set()
+			confirmedTickets.forEach(t => {
+				t.seats?.forEach(s => confirmedSeats.add(`${s.row}${s.number}`))
+			})
+			showtime.seats = showtime.seats.filter(seat => confirmedSeats.has(`${seat.row}${seat.number}`))
+		}
+
 		const isSeatValid = seats.every((seatNumber) => {
-			const [row, number] = seatNumber.match(/([A-Za-z]+)(\d+)/).slice(1)
+			const match = seatNumber.match(/([A-Za-z]+)(\d+)/)
+			if (!match) return false
+			const [row, number] = match.slice(1)
 			const maxRow = showtime.theater.seatPlan.row
 			const maxCol = showtime.theater.seatPlan.column
 
@@ -161,11 +203,11 @@ exports.purchase = async (req, res, next) => {
 				return maxRow.length > row.length
 			}
 
-			return maxRow.localeCompare(row) >= 0 && number <= maxCol
+			return maxRow.localeCompare(row) >= 0 && parseInt(number, 10) <= maxCol
 		})
 
 		if (!isSeatValid) {
-			return res.status(400).json({ success: false, message: 'Seat is not valid' })
+			return res.status(400).json({ success: false, message: 'Seat selection is invalid' })
 		}
 
 		const isSeatAvailable = seats.every((seatNumber) => {
@@ -174,7 +216,7 @@ exports.purchase = async (req, res, next) => {
 		})
 
 		if (!isSeatAvailable) {
-			return res.status(400).json({ success: false, message: 'Seat not available' })
+			return res.status(400).json({ success: false, message: 'One or more selected seats are no longer available' })
 		}
 
 		const seatUpdates = seats.map((seatNumber) => {
@@ -185,7 +227,19 @@ exports.purchase = async (req, res, next) => {
 		showtime.seats.push(...seatUpdates)
 		const updatedShowtime = await showtime.save()
 
-		const updatedUser = await User.findByIdAndUpdate(
+		const ticketStatus = isPurchased ? 'purchased' : 'booked'
+
+		const ticket = await Ticket.create({
+			user: user._id,
+			showtime: showtime._id,
+			movie: showtime.movie,
+			showtimeTime: showtime.showtime,
+			seats: seatUpdates,
+			price: 10,
+			status: ticketStatus
+		})
+
+		await User.findByIdAndUpdate(
 			user._id,
 			{
 				$push: { tickets: { showtime, seats: seatUpdates } }
@@ -193,10 +247,10 @@ exports.purchase = async (req, res, next) => {
 			{ new: true }
 		)
 
-		res.status(200).json({ success: true, data: updatedShowtime, updatedUser })
+		res.status(200).json({ success: true, data: updatedShowtime, ticket })
 	} catch (err) {
 		console.log(err)
-		res.status(400).json({ success: false, message: err })
+		res.status(400).json({ success: false, message: err.message || err })
 	}
 }
 

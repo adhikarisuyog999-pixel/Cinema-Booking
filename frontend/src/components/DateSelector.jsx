@@ -1,11 +1,12 @@
 import { ArrowPathIcon, ChevronLeftIcon, ChevronRightIcon } from '@heroicons/react/24/solid'
-import React, { useContext, useEffect, useRef, useState } from 'react'
+import { useContext, useEffect, useRef, useState } from 'react'
 import { AuthContext } from '../context/AuthContext'
 
 const DateSelector = ({ selectedDate, setSelectedDate }) => {
 	const { auth } = useContext(AuthContext)
 	const wrapperRef = useRef(null)
-	const [isEditing, SetIsEditing] = useState(false)
+	const scrollRef = useRef(null)
+	const [isEditing, setIsEditing] = useState(false)
 
 	const handlePrevDay = () => {
 		const prevDay = new Date(selectedDate)
@@ -35,42 +36,20 @@ const DateSelector = ({ selectedDate, setSelectedDate }) => {
 		return `${weekday} ${day} ${month} ${year}`
 	}
 
-	const DateShort = ({ date, selectedDate }) => {
-		const day = date.getDate()
-		const weekday = date.toLocaleString('default', { weekday: 'short' })
+	const isPast = (date) => {
+		return new Date(date).setHours(0, 0, 0, 0) < new Date().setHours(0, 0, 0, 0)
+	}
 
-		const isThisDate =
+	const isToday = (date) => {
+		return new Date(date).setHours(0, 0, 0, 0) === new Date().setHours(0, 0, 0, 0)
+	}
+
+	const isSelected = (date) => {
+		return (
 			selectedDate.getDate() === date.getDate() &&
 			selectedDate.getMonth() === date.getMonth() &&
 			selectedDate.getFullYear() === date.getFullYear()
-
-		const isToday = new Date(date).setHours(0, 0, 0, 0) === new Date().setHours(0, 0, 0, 0)
-
-		return (
-			<button
-				title={formatDate(date)}
-				className={`flex min-w-[48px] flex-col items-center justify-center rounded p-1 font-semibold ${
-					isThisDate
-						? 'bg-gradient-to-br from-indigo-800 to-blue-700 text-white'
-						: isToday
-						? 'bg-gradient-to-br from-indigo-100 to-white ring-2 ring-inset ring-indigo-800 hover:from-white hover:to-white'
-						: isPast(date)
-						? 'bg-gradient-to-br from-gray-600 to-gray-500 text-white hover:from-gray-500 hover:to-gray-400'
-						: 'bg-gradient-to-br from-indigo-100 to-white hover:from-white hover:to-white'
-				}`}
-				onClick={() => {
-					setSelectedDate(date)
-					sessionStorage.setItem('selectedDate', date)
-				}}
-			>
-				<p className="text-sm">{weekday}</p>
-				<p className="text-xl">{day}</p>
-			</button>
 		)
-	}
-
-	const isPast = (date) => {
-		return new Date(date).setHours(0, 0, 0, 0) < new Date().setHours(0, 0, 0, 0)
 	}
 
 	const handleChange = (event) => {
@@ -80,12 +59,10 @@ const DateSelector = ({ selectedDate, setSelectedDate }) => {
 	function generateDateRange(startDate, endDate) {
 		const dates = []
 		const currentDate = new Date(startDate)
-
 		while (currentDate <= endDate) {
 			dates.push(new Date(currentDate.getTime()))
 			currentDate.setDate(currentDate.getDate() + 1)
 		}
-
 		return dates
 	}
 
@@ -95,87 +72,127 @@ const DateSelector = ({ selectedDate, setSelectedDate }) => {
 		if (auth.role === 'admin') {
 			pastDays.setDate(today.getDate() - 7)
 		}
-
 		const nextDays = new Date(today)
 		nextDays.setDate(today.getDate() + 14)
-
 		return generateDateRange(pastDays, nextDays)
 	}
 
 	useEffect(() => {
-		document.addEventListener('click', handleClickOutside, false)
-		return () => {
-			document.removeEventListener('click', handleClickOutside, false)
+		const handleClickOutside = (event) => {
+			if (wrapperRef.current && !wrapperRef.current.contains(event.target)) {
+				setIsEditing(false)
+			}
 		}
+		document.addEventListener('click', handleClickOutside, false)
+		return () => document.removeEventListener('click', handleClickOutside, false)
 	}, [])
 
-	const handleClickOutside = (event) => {
-		if (wrapperRef.current && !wrapperRef.current.contains(event.target)) {
-			SetIsEditing(false)
+	// Scroll selected date into view
+	useEffect(() => {
+		if (scrollRef.current) {
+			const activeBtn = scrollRef.current.querySelector('[data-active="true"]')
+			if (activeBtn) {
+				activeBtn.scrollIntoView({ behavior: 'smooth', inline: 'center', block: 'nearest' })
+			}
 		}
-	}
+	}, [selectedDate])
+
+	const dates = getPastAndNextDateRange()
 
 	return (
-		<div className="flex flex-col gap-2">
-			<div className="relative flex items-stretch justify-between gap-2 rounded-md bg-gradient-to-br from-indigo-800 to-blue-700 p-2 font-semibold text-white">
-				{auth.role === 'admin' || !isPast(new Date().setDate(selectedDate.getDate() - 1)) ? (
-					<button
-						title="Go to yesterday"
-						className={'rounded hover:bg-gradient-to-br hover:from-indigo-600 hover:to-blue-600'}
-						onClick={handlePrevDay}
-					>
-						<ChevronLeftIcon className="h-10 w-10 text-white" />
-					</button>
-				) : (
-					<div className="h-10 w-10"></div>
-				)}
+		<div className="flex flex-col gap-0">
+			{/* Header bar with date title + nav */}
+			<div
+				className="flex items-center justify-between gap-2 px-3 py-2 rounded-t-2xl"
+				style={{ background: 'linear-gradient(135deg, #3B4DDB 0%, #4F5FE8 100%)' }}
+			>
+				<button
+					title="Go to yesterday"
+					onClick={handlePrevDay}
+					className="flex h-9 w-9 items-center justify-center rounded-xl text-white hover:bg-white/20 transition-colors"
+				>
+					<ChevronLeftIcon className="h-5 w-5" />
+				</button>
 
 				{isEditing ? (
-					<div className="w-full" ref={wrapperRef}>
+					<div className="flex-1" ref={wrapperRef}>
 						<input
 							title="Select date"
-							type="Date"
+							type="date"
 							min={auth.role !== 'admin' && new Date().toLocaleDateString('en-CA')}
 							required
 							autoFocus
-							className={`w-full rounded border border-white bg-gradient-to-br from-indigo-800 to-blue-700 px-1 text-center text-2xl font-semibold drop-shadow-sm sm:text-3xl`}
+							className="w-full bg-transparent text-center text-lg font-bold text-white outline-none"
 							value={selectedDate.toLocaleDateString('en-CA')}
 							onChange={handleChange}
 							style={{ colorScheme: 'dark' }}
 						/>
 					</div>
 				) : (
-					<div
-						className="flex w-full items-center justify-center rounded text-center text-xl hover:bg-gradient-to-br hover:from-indigo-600 hover:to-blue-600 sm:text-2xl"
-						onClick={() => {
-							SetIsEditing(true)
-						}}
+					<button
+						onClick={() => setIsEditing(true)}
+						className="flex-1 text-center text-base font-bold text-white hover:bg-white/10 rounded-lg py-1 transition-colors"
 					>
 						{formatDate(selectedDate)}
-					</div>
+					</button>
 				)}
 
-				<div className="flex items-center justify-between gap-2">
+				<div className="flex items-center gap-1">
 					<button
 						title="Go to tomorrow"
-						className="rounded hover:bg-gradient-to-br hover:from-indigo-600 hover:to-blue-600"
 						onClick={handleNextDay}
+						className="flex h-9 w-9 items-center justify-center rounded-xl text-white hover:bg-white/20 transition-colors"
 					>
-						<ChevronRightIcon className="h-10 w-10 text-white" />
+						<ChevronRightIcon className="h-5 w-5" />
 					</button>
 					<button
 						title="Go to today"
-						className="rounded px-1 hover:bg-gradient-to-br hover:from-indigo-600 hover:to-blue-600"
 						onClick={handleToday}
+						className="flex h-9 w-9 items-center justify-center rounded-xl text-white hover:bg-white/20 transition-colors"
 					>
-						<ArrowPathIcon className="h-10 w-10 text-white" />
+						<ArrowPathIcon className="h-4 w-4" />
 					</button>
 				</div>
 			</div>
-			<div className="flex gap-2 overflow-auto">
-				{getPastAndNextDateRange().map((date, index) => (
-					<DateShort key={index} date={date} selectedDate={selectedDate} />
-				))}
+
+			{/* Scrollable date strip */}
+			<div
+				ref={scrollRef}
+				className="flex gap-1.5 overflow-x-auto rounded-b-2xl px-2 py-2 scrollbar-hide"
+				style={{ background: 'rgba(59,77,219,0.08)', backdropFilter: 'blur(4px)' }}
+			>
+				{dates.map((date, index) => {
+					const selected = isSelected(date)
+					const today = isToday(date)
+					const past = isPast(date)
+
+					return (
+						<button
+							key={index}
+							data-active={selected ? 'true' : 'false'}
+							title={formatDate(date)}
+							onClick={() => {
+								setSelectedDate(date)
+								sessionStorage.setItem('selectedDate', date)
+							}}
+							className={`flex min-w-[52px] flex-col items-center justify-center rounded-xl py-1.5 px-1 text-xs font-semibold transition-all flex-shrink-0 ${
+								selected
+									? 'text-white shadow-lg ring-2 ring-white/30'
+									: today
+									? 'bg-white text-[#3B4DDB] ring-2 ring-[#3B4DDB] hover:bg-blue-50'
+									: past
+									? 'bg-white/40 text-slate-500 hover:bg-white/60'
+									: 'bg-white/70 text-slate-700 hover:bg-white'
+							}`}
+							style={selected ? { background: 'linear-gradient(135deg, #3B4DDB 0%, #4F5FE8 100%)' } : {}}
+						>
+							<span className="text-[10px] leading-tight">
+								{date.toLocaleString('default', { weekday: 'short' })}
+							</span>
+							<span className="text-lg leading-tight font-bold">{date.getDate()}</span>
+						</button>
+					)
+				})}
 			</div>
 		</div>
 	)

@@ -1,34 +1,50 @@
-import { TrashIcon } from '@heroicons/react/24/solid'
+import { TrashIcon } from '@heroicons/react/24/outline'
 
 const MovieLists = ({ movies, search, handleDelete }) => {
-	const moviesList = movies?.filter((movie) => movie.name.toLowerCase().includes(search?.toLowerCase() || ''))
+  const moviesList = movies?.filter((movie) =>
+    movie.name.toLowerCase().includes(search?.toLowerCase() || '')
+  ) || []
 
-	return !!moviesList.length ? (
-		<div className="grid grid-cols-1 gap-4 rounded-md bg-gradient-to-br from-indigo-100 to-white p-4 drop-shadow-md lg:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4 min-[1920px]:grid-cols-5">
-			{moviesList.map((movie, index) => {
-				return (
-					<div key={index} className="flex min-w-fit flex-grow rounded-md bg-white drop-shadow-md">
-						<img src={movie.img} className="h-36 rounded-md object-contain drop-shadow-md sm:h-48" />
-						<div className="flex flex-grow flex-col justify-between p-2">
-							<div>
-								<p className="text-lg font-semibold sm:text-xl">{movie.name}</p>
-								<p>length : {movie.length || '-'} min.</p>
-							</div>
-							<button
-								className="flex w-fit items-center gap-1 self-end rounded-md bg-gradient-to-br from-red-700 to-rose-600 py-1 pl-2 pr-1.5 text-sm font-medium text-white hover:from-red-600 hover:to-rose-500"
-								onClick={() => handleDelete(movie)}
-							>
-								DELETE
-								<TrashIcon className="h-5 w-5" />
-							</button>
-						</div>
-					</div>
-				)
-			})}
-		</div>
-	) : (
-		<div>No movies found</div>
-	)
+  return moviesList.length ? (
+    <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
+      {moviesList.map((movie) => (
+        <div
+          key={movie._id}
+          className="flex overflow-hidden rounded-xl border border-slate-200 bg-white shadow-md p-3 gap-3"
+        >
+          <img
+            src={movie.img}
+            alt={movie.name}
+            className="h-32 w-20 object-cover rounded-lg border border-slate-200 flex-shrink-0"
+          />
+          <div className="flex flex-1 flex-col justify-between">
+            <div>
+              <h3 className="text-sm font-bold text-slate-900 line-clamp-2">{movie.name}</h3>
+              <p className="text-xs text-slate-500 mt-1">Duration: {movie.length || 120} min</p>
+              {movie.price > 0 && (
+                <p className="text-xs font-semibold text-orange-600 mt-0.5">
+                  NPR {movie.price.toFixed(2)}
+                </p>
+              )}
+            </div>
+            <div className="flex justify-end pt-2">
+              <button
+                className="flex items-center gap-1 rounded border border-red-300 bg-red-100 px-2.5 py-1 text-[11px] font-medium text-red-600 hover:bg-red-200 transition-colors"
+                onClick={() => handleDelete(movie._id || movie)}
+              >
+                <TrashIcon className="h-3.5 w-3.5" />
+                <span>Delete</span>
+              </button>
+            </div>
+          </div>
+        </div>
+      ))}
+    </div>
+  ) : (
+    <div className="rounded-xl border border-slate-200 bg-white p-8 text-center text-xs text-slate-500">
+      No movies found.
+    </div>
+  )
 }
 
 export default MovieLists
