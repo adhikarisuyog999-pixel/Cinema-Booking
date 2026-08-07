@@ -98,20 +98,20 @@ const Navbar = () => {
 						</div>
 					)}
 					{auth.token ? (
-						<button
-							className="rounded-lg bg-blue-900/80 border border-blue-700/50 px-3 py-1.5 text-xs font-medium text-white hover:bg-blue-800 transition-colors disabled:opacity-50"
-							onClick={() => onLogout()}
-							disabled={isLoggingOut}
-						>
-							{isLoggingOut ? 'Logging out...' : 'Logout'}
-						</button>
+          <button
+            className="rounded-lg bg-primary-gradient text-white px-3 py-1.5 text-xs font-medium hover:opacity-90 transition-colors disabled:opacity-50"
+            onClick={() => onLogout()}
+            disabled={isLoggingOut}
+          >
+            {isLoggingOut ? 'Logging out...' : 'Logout'}
+          </button>
 					) : (
-						<Link
-							to={'/login'}
-							className="rounded-lg bg-orange-500 px-4 py-1.5 text-xs font-semibold text-white shadow-md hover:bg-orange-600 transition-all"
-						>
-							Login
-						</Link>
+          <Link
+            to={'/login'}
+            className="rounded-lg bg-primary-gradient text-white px-4 py-1.5 text-xs font-semibold hover:opacity-90 transition-all"
+          >
+            Login
+          </Link>
 					)}
 				</div>
 			</>
@@ -120,16 +120,17 @@ const Navbar = () => {
 
 	return (
 		<nav className="sticky top-0 z-50 flex flex-col items-center justify-between border-b border-blue-800/40 bg-slate-900/90 backdrop-blur-md px-4 py-3 sm:px-8 lg:flex-row shadow-lg">
-			<div className="flex w-full items-center justify-between lg:w-auto lg:mr-8">
-				<button className="flex items-center gap-2.5 group" onClick={() => navigate('/')}>
-					<div className="flex h-9 w-9 items-center justify-center rounded-lg bg-orange-500 text-white shadow-md group-hover:bg-orange-600 transition-colors">
-						<FilmIcon className="h-5 w-5" />
-					</div>
-					<div className="text-left">
-						<h1 className="text-lg font-bold tracking-tight text-white leading-none">CINEBOOK</h1>
-						<span className="text-[10px] font-medium tracking-wider text-slate-300 uppercase">Cinema Tickets</span>
-					</div>
-				</button>
+			          <div className="flex w-full items-center justify-between lg:w-auto lg:mr-8">
+            <button className="flex items-center gap-2.5 group" onClick={() => navigate('/')}
+            >
+              <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-primary-gradient text-white shadow-md group-hover:opacity-90 transition-colors">
+                <FilmIcon className="h-5 w-5" />
+              </div>
+              <div className="text-left">
+                <h1 className="text-lg font-bold tracking-tight text-white leading-none">CINEBOOK</h1>
+                <span className="text-[10px] font-medium tracking-wider text-slate-300 uppercase">Cinema Tickets</span>
+              </div>
+            </button>
 				<button
 					className="flex h-9 w-9 items-center justify-center rounded-lg border border-blue-800 bg-blue-950 text-slate-200 hover:bg-blue-900 lg:hidden"
 					onClick={() => toggleMenu()}
