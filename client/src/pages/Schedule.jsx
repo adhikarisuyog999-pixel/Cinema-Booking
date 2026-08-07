@@ -87,38 +87,57 @@ const Schedule = () => {
   };
 
   const fetchMoviesAndShowtimes = async () => {
+    setIsFetchingMovies(true);
+    const headers = auth.token
+      ? { Authorization: `Bearer ${auth.token}` }
+      : {};
+    let fetchedMovies = [];
+    let fetchedShowtimes = [];
+    let hadError = false;
+
     try {
-      setIsFetchingMovies(true);
-      const [moviesRes, showtimesRes] = await Promise.all([
-        auth.role === "admin"
-          ? axios.get("/movie/unreleased/showing", {
-              headers: { Authorization: `Bearer ${auth.token}` },
-            })
-          : axios.get("/movie"),
-        axios.get("/showtime"),
-      ]);
-
-      const fetchedMovies = moviesRes.data?.data || [];
-      const fetchedShowtimes = showtimesRes.data?.data || [];
-
+      const moviesRes = await axios.get("/movie", { headers });
+      fetchedMovies = moviesRes.data?.data || [];
       setMovies(fetchedMovies);
-      setShowtimes(fetchedShowtimes);
-
-      if (fetchedMovies.length > 0 && !selectedMovieId) {
-        setSelectedMovieId(fetchedMovies[0]._id);
-      }
     } catch (error) {
-      console.error(error);
-      toast.error("Failed to load movies. Please try again.");
-    } finally {
-      setIsFetchingMovies(false);
+      console.error("Failed to load movies:", error);
+      hadError = true;
     }
+
+    try {
+      const showtimesRes =
+        auth.role === "admin"
+          ? await axios.get("/showtime/unreleased", { headers })
+          : await axios.get("/showtime");
+      fetchedShowtimes = showtimesRes.data?.data || [];
+      setShowtimes(fetchedShowtimes);
+    } catch (error) {
+      console.error("Failed to load showtimes:", error);
+      try {
+        const fallbackRes = await axios.get("/showtime");
+        fetchedShowtimes = fallbackRes.data?.data || [];
+        setShowtimes(fetchedShowtimes);
+      } catch (fallbackError) {
+        console.error("Failed to load showtimes fallback:", fallbackError);
+        hadError = true;
+      }
+    }
+
+    if (fetchedMovies.length > 0 && !selectedMovieId) {
+      setSelectedMovieId(fetchedMovies[0]._id);
+    }
+
+    if (hadError) {
+      toast.error("Failed to load movies. Please try again.");
+    }
+
+    setIsFetchingMovies(false);
   };
 
   useEffect(() => {
     fetchCinemas();
     fetchMoviesAndShowtimes();
-  }, []);
+  }, [auth.role, auth.token]);
 
   const selectedMovie = useMemo(() => {
     return (
