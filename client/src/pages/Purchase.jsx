@@ -72,9 +72,15 @@ const Purchase = () => {
 
   if (loadingShowtime) {
     return (
+<<<<<<< Updated upstream
       <div className="min-h-screen text-slate-800 flex flex-col">
         <Navbar />
         <div className="py-16 text-center bg-white shadow-xl rounded-2xl max-w-2xl mx-auto my-12">
+=======
+      <div className="min-h-screen bg-slate-950 text-slate-100 flex flex-col">
+        <Navbar />
+        <div className="py-16 text-center">
+>>>>>>> Stashed changes
           <Loading />
         </div>
       </div>
@@ -83,10 +89,17 @@ const Purchase = () => {
 
   if (fetchError) {
     return (
+<<<<<<< Updated upstream
       <div className="min-h-screen text-slate-800 flex flex-col">
         <Navbar />
         <main className="mx-auto max-w-3xl px-4 py-12">
           <div className="rounded-2xl border border-red-200 bg-white p-6 text-center text-red-600 shadow-xl">
+=======
+      <div className="min-h-screen bg-slate-950 text-slate-100 flex flex-col">
+        <Navbar />
+        <main className="mx-auto max-w-3xl px-4 py-12">
+          <div className="rounded-2xl border border-red-900/80 bg-red-950/40 p-6 text-center text-red-300">
+>>>>>>> Stashed changes
             <p>{fetchError}</p>
           </div>
         </main>
@@ -97,6 +110,7 @@ const Purchase = () => {
   if (!showtime) return null;
 
   return (
+<<<<<<< Updated upstream
     <div className="min-h-screen text-slate-800 flex flex-col">
       <Navbar />
       <main className="flex-1 mx-auto w-full max-w-4xl px-4 py-8 sm:px-6">
@@ -120,6 +134,31 @@ const Purchase = () => {
 
             <div className="rounded-xl border border-amber-200 bg-amber-50 p-4 text-xs text-amber-900 flex items-center gap-3">
               <ClockIcon className="h-5 w-5 flex-shrink-0 text-amber-600" />
+=======
+    <div className="min-h-screen bg-slate-950 text-slate-100 flex flex-col">
+      <Navbar />
+      <main className="flex-1 mx-auto w-full max-w-4xl px-4 py-8 sm:px-6">
+        <div className="space-y-6">
+          <h1 className="text-2xl font-bold tracking-tight text-white">Confirm Ticket Order</h1>
+
+          <ShowtimeDetails showtime={showtime} />
+
+          <div className="rounded-2xl border border-slate-800 bg-slate-900/80 p-6 shadow-xl space-y-4">
+            <h3 className="text-sm font-bold text-white uppercase tracking-wider">Order Summary</h3>
+
+            <div className="flex justify-between items-center py-2 border-b border-slate-800 text-xs">
+              <span className="text-slate-400">Selected Seats</span>
+              <span className="font-mono font-bold text-white">{selectedSeats.join(", ") || "None"}</span>
+            </div>
+
+            <div className="flex justify-between items-center py-2 border-b border-slate-800 text-xs">
+              <span className="text-slate-400">Seats Count</span>
+              <span className="font-semibold text-slate-200">{selectedSeats.length} seats</span>
+            </div>
+
+            <div className="rounded-xl border border-amber-800/80 bg-amber-950/40 p-4 text-xs text-amber-300 flex items-center gap-3">
+              <ClockIcon className="h-5 w-5 flex-shrink-0 text-amber-400" />
+>>>>>>> Stashed changes
               <span>
                 <strong>Requirement:</strong> Reserved tickets must be purchased at least 30 minutes before showtime, otherwise the reservation expires and becomes available for anyone to buy.
               </span>
@@ -130,7 +169,11 @@ const Purchase = () => {
                 <button
                   disabled={isPurchasing}
                   onClick={() => onPurchase(false)}
+<<<<<<< Updated upstream
                   className="flex-1 rounded-xl border border-slate-300 bg-white py-2.5 text-xs font-semibold text-slate-700 hover:bg-slate-100 transition-colors shadow-sm disabled:opacity-50"
+=======
+                  className="flex-1 rounded-lg border border-slate-700 bg-slate-800 py-2.5 text-xs font-semibold text-slate-200 hover:bg-slate-700 transition-colors disabled:opacity-50"
+>>>>>>> Stashed changes
                 >
                   Reserve Only (Pay Later)
                 </button>
@@ -138,7 +181,11 @@ const Purchase = () => {
               <button
                 disabled={isPurchasing || !canBuy}
                 onClick={() => onPurchase(true)}
+<<<<<<< Updated upstream
                 className="flex-1 flex items-center justify-center gap-2 rounded-xl bg-orange-500 py-2.5 text-xs font-semibold text-white shadow-md hover:bg-orange-600 transition-colors disabled:opacity-50"
+=======
+                className="flex-1 flex items-center justify-center gap-2 rounded-lg bg-red-600 py-2.5 text-xs font-semibold text-white shadow-md hover:bg-red-500 transition-colors disabled:opacity-50"
+>>>>>>> Stashed changes
               >
                 <TicketIcon className="h-4 w-4" />
                 <span>{isPurchasing ? "Processing..." : "Confirm & Buy Ticket"}</span>
